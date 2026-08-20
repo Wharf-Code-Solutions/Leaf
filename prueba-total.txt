@@ -1,0 +1,200 @@
+// ============================================================
+// ARCHIVO DE PRUEBA COMPLETO — LEAF (SINTAXIS ACTUALIZADA)
+// Cubre el 100% de las producciones de la gramatica actual
+// ============================================================
+
+
+// ============================================================
+// 1. VARIABLES — Declaracion de cada tipo basico
+// ============================================================
+
+definir $entero  como entero  con valor de 10.
+definir $decimal como decimal con valor de 3.14.
+definir $texto   como texto   con valor de "Hola mundo".
+definir $logico  como logico  con valor de verdadero.
+
+
+// ============================================================
+// 2. CONSTANTES — Inicializacion con literales estrictos
+// ============================================================
+
+constante $PI      como decimal con valor de 3.1416.
+constante $MAX     como entero  con valor de 100.
+constante $NOMBRE  como texto   con valor de "Proyecto Leaf".
+constante $ACTIVO  como logico  con valor de verdadero.
+
+
+// ============================================================
+// 3. ASIGNACION SIMPLE Y LECTURA
+// ============================================================
+
+$entero  con valor de 20.
+$decimal con valor de 9.99.
+$texto   con valor de ingresar("Ingresa un nuevo texto: ").
+$logico  con valor de falso.
+
+
+// ============================================================
+// 4. MOSTRAR — Una y multiples expresiones
+// ============================================================
+
+mostrar($entero).
+mostrar("Valores actualizados: ", $decimal, $texto).
+
+
+// ============================================================
+// 5. ARITMETICA Y LOGICA — (Beneficio de la Cascada Universal)
+// ============================================================
+
+definir $suma    como entero  con valor de $entero + 5.
+definir $resta   como entero  con valor de $entero - 3.
+definir $multi   como entero  con valor de $entero * 2.
+definir $divi    como decimal con valor de $entero / 4.
+definir $pot     como entero  con valor de 2 ^ 8.
+definir $mod     como entero  con valor de 10 % 3.
+definir $raiz    como decimal con valor de 16 -/ 2.
+definir $neg     como entero  con valor de -$entero.
+definir $compl   como decimal con valor de ($entero + 2) * (3 - 1) / 4.
+
+// Asignacion de una condicion directamente a un tipo logico
+definir $es_valido como logico con valor de ($suma mayor que 10) Y ($raiz menor o igual que 5).
+
+
+// ============================================================
+// 6. CONDICIONALES (si, sino si, sino)
+// ============================================================
+
+// 6a. Si simple con NO
+si (NO ($entero igual que 5)) >
+    mostrar("No es cinco").
+<
+
+// 6b. Condicional Multiple (Y, O, Operadores Relacionales)
+si ($entero igual que 10) >
+    mostrar("Es diez").
+< sino si ($entero mayor que 20 Y $entero menor que 50) >
+    mostrar("Esta entre 20 y 50").
+< sino si ($logico igual que falso O $decimal diferente que 0) >
+    mostrar("Condicion OR cumplida").
+< sino >
+    mostrar("Cayo en el sino por defecto").
+<
+
+// 6c. Anidamiento de bloques
+si ($entero mayor o igual que 0) >
+    si ($entero menor o igual que 100) >
+        mostrar("Anidamiento correcto: Rango 0-100").
+    <
+<
+
+
+// ============================================================
+// 7. SEGUN (Switch) — Sin llaves/bloques extra en los casos
+// ============================================================
+
+// Prueba con variable de texto
+definir $op como texto con valor de "sumar".
+
+segun ($op) >
+    caso "sumar" ->
+        mostrar("Operacion sumar").
+        romper.
+    caso "restar" ->
+        mostrar("Operacion restar").
+        romper.
+    defecto ->
+        mostrar("Operacion desconocida").
+<
+
+// Prueba con decimales
+segun ($decimal) >
+    caso 9.99 ->
+        mostrar("Coincide con decimal").
+        romper.
+    defecto ->
+        mostrar("No coincide").
+<
+
+
+// ============================================================
+// 8. ESTRUCTURAS ITERATIVAS (Ciclos)
+// ============================================================
+
+// 8a. Ciclo Mientras
+definir $i como entero con valor de 0.
+mientras ($i menor que 5) >
+    $i con valor de $i + 1.
+    si ($i igual que 2) >
+        continuar. // Salta la iteracion
+    <
+    mostrar("Mientras iteracion: ", $i).
+<
+
+// 8b. Ciclo Repetir (con expresion)
+repetir ($entero / 4) veces >
+    mostrar("Repitiendo...").
+<
+
+// 8c. Ciclo Para (con paso positivo y negativo)
+para $j de 1 hasta 10 paso 2 >
+    si ($j mayor que 7) >
+        romper. // Sale del ciclo prematuramente
+    <
+    mostrar("Para iteracion: ", $j).
+<
+
+
+// ============================================================
+// 9. ARREGLOS — Unidimensionales y Operaciones
+// ============================================================
+
+// Declaracion y arreglos vacios
+definir $numeros como arreglo[entero] con valor de [1, 2, 3, 4, 5].
+definir $textos  como arreglo[texto]  con valor de ["Ana", "Luis", "Maria"].
+definir $vacio   como arreglo[entero] con valor de [].
+
+// Modificacion y acceso
+$numeros[0] con valor de 99.
+mostrar("Elemento 0 es: ", $numeros[0]).
+
+// Operaciones nativas de arreglos
+agregar 6 en $numeros.
+quitar indice [1] de $numeros.
+
+// Longitud nativa en expresion
+definir $tam como entero con valor de longitud($numeros).
+mostrar("El arreglo tiene elementos: ", $tam).
+
+
+// ============================================================
+// 10. MATRICES (Arreglos Multidimensionales Recursivos)
+// ============================================================
+
+definir $matriz como arreglo[arreglo[entero]] con valor de [[1, 2], [3, 4], [5, 6]].
+
+// Modificacion y acceso multiple
+$matriz[1][0] con valor de 99.
+definir $elem como entero con valor de $matriz[0][0] + $matriz[0][1].
+mostrar("Suma de la primera fila: ", $elem).
+
+
+// ============================================================
+// 11. FUNCIONES
+// ============================================================
+
+// 11a. Sin parametros, entrega vacio (procedimiento)
+funcion saludarSistema() entrega vacio >
+    mostrar("Pruebas finalizadas con exito.").
+<
+
+// 11b. Multiples parametros, retorna entero
+funcion calcularHipotenusa($a como decimal, $b como decimal) entrega decimal >
+    retornar ($a * $a + $b * $b) -/ 2.
+<
+
+// 11c. Llamadas a funciones dentro de expresiones e instrucciones
+definir $resultado_funcion como decimal con valor de calcularHipotenusa(3.0, 4.0).
+mostrar("Hipotenusa de 3 y 4 es: ", $resultado_funcion).
+
+// Ejecucion final
+saludarSistema().
