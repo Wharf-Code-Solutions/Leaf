@@ -17,66 +17,216 @@ public class Leaf {
     static int totalErrores = 0;
     static Stack<Token> pilaAberturas = new Stack<Token>();
 
-    public static void main(String[] args) {
-        Scanner teclado = new Scanner(System.in);
-        File archivo;
-        while (true) {
-            System.out.println("Escriba la ruta del archivo a compilar");
-            String ruta = teclado.nextLine().trim();
-            archivo = new File(ruta);
+    // =========================================================
+    // ESTRUCTURAS DEL ANÁLISIS SEMÁNTICO Y CÓDIGO INTERMEDIO
+    // =========================================================
 
-            if (!archivo.exists()) {
-                System.out.println("No se encontro el archivo \"" + ruta + "\". Intenta de nuevo.\n");
-                continue;
-            }
-            if (archivo.isDirectory()) {
-                System.out.println("\"" + ruta + "\" es una carpeta, no un archivo. Intenta de nuevo.\n");
-                continue;
-            }
-            if (!archivo.canRead()) {
-                System.out.println("No se puede leer el archivo \"" + ruta + "\". Revisa los permisos e intenta de nuevo.\n");
-                continue;
-            }
-            break;
-        }
-        try {
-            FileInputStream fis = new FileInputStream(archivo);
-            Leaf parser = new Leaf(fis, "UTF-8");
-            parser.programa();
-        } catch (java.io.FileNotFoundException e) {
-            System.out.println("No se encontro el archivo \"" + archivo + "\".");
-            return;
-        } catch (ParseException e) {
-            registrarError(tokenParaError(e), mensajeReporteError(e));
-        } catch (TokenMgrError e) {
-            totalErrores++;
-            String msg = e.getMessage();
-            if (msg != null && msg.contains("<EOF>")) {
-                errores.add("Tipo de Error: Lexico : Parece que falta una comilla \" de cierre "
-                    + "en un texto. Revisa que cada texto empiece y termine con \". "
-                    + "Ejemplo: mostrar(\"hola\").");
-            } else {
-                errores.add("Tipo de Error: Lexico : Se encontro un simbolo que no se pudo "
-                    + "interpretar en el codigo. Revisa que no haya caracteres invalidos.");
-            }
-        }
+    static class Simbolo {
+        String nombre;
+        String tipo;
+        String categoria;    // "variable", "constante", "arreglo", "funcion", "parametro"
+        String ambito;       // "Global" o el nombre de la función local
+        int offset;
+        int linea;
 
-        System.out.println("\n============================================");
-        if (errores.isEmpty()) {
-            System.out.println("  Programa valido. Sin errores.");
-        } else {
-            System.out.println("  Se encontraron " + totalErrores + " error(es):\n");
-            for (String err : errores) System.out.println("  " + err);
+        // --- Extensiones críticas para Semántica y Cuádruplos ---
+        int dimensiones;                    // Para arreglos N-dimensionales
+        String tipoRetorno;                 // Exclusivo para funciones
+        ArrayList<String> tiposParametros;  // Exclusivo para guardar la firma de la función
+        Object valorConstante;              // Exclusivo para constantes (plegado)
+        boolean inicializada;
+
+        public Simbolo(String nombre, String tipo, String categoria, String ambito, int offset, int linea) {
+            this.nombre = nombre;
+            this.tipo = tipo;
+            this.categoria = categoria;
+            this.ambito = ambito;
+            this.offset = offset;
+            this.linea = linea;
+            this.dimensiones = 0;
+            this.tiposParametros = new ArrayList<String>();
+            this.inicializada = true;
         }
-        System.out.println("============================================");
     }
 
-    static void registrarError(Token t, String mensaje) {
+    static class TablaSimbolos {
+        private Stack<java.util.HashMap<String, Simbolo>> pilaTablas;
+        private Stack<String> pilaNombresAmbitos;
+
+        private int offsetGlobal = 0;
+        private int offsetLocal = 0;
+
+        public TablaSimbolos() {
+            pilaTablas = new Stack<java.util.HashMap<String, Simbolo>>();
+            pilaNombresAmbitos = new Stack<String>();
+
+            pilaTablas.push(new java.util.HashMap<String, Simbolo>());
+            pilaNombresAmbitos.push("Global");
+        }
+
+        public void entrarBloque(String nombreAmbito) {
+            pilaTablas.push(new java.util.HashMap<String, Simbolo>());
+            pilaNombresAmbitos.push(nombreAmbito);
+        }
+
+        public void salirBloque() {
+            if (pilaTablas.size() > 1) {
+                pilaTablas.pop();
+                pilaNombresAmbitos.pop();
+            }
+        }
+
+        public void resetearOffsetLocal() {
+            this.offsetLocal = 0; // Solo se llama al declarar una nueva función
+        }
+
+        public String obtenerAmbitoActual() {
+            return pilaNombresAmbitos.peek();
+        }
+
+        public Simbolo buscarLocal(String nombre) {
+            // Revisa únicamente el ámbito en el que estamos parados ahorita
+            return pilaTablas.peek().get(nombre);
+        }
+
+        public Simbolo insertar(String nombre, String tipo, String categoria, int linea, int dimensiones) {
+            java.util.HashMap<String, Simbolo> tablaTope = pilaTablas.peek();
+
+            if (tablaTope.containsKey(nombre)) {
+                return null; // Error: Ya existe en el ámbito local
+            }
+
+            String ambitoActual = obtenerAmbitoActual();
+            int tamano = obtenerTamano(tipo, dimensiones);
+            int offsetAsignado = ambitoActual.equals("Global") ? offsetGlobal : offsetLocal;
+
+            Simbolo nuevoSimbolo = new Simbolo(nombre, tipo, categoria, ambitoActual, offsetAsignado, linea);
+            nuevoSimbolo.dimensiones = dimensiones;
+            tablaTope.put(nombre, nuevoSimbolo);
+
+            if (ambitoActual.equals("Global")) {
+                offsetGlobal += tamano;
+            } else {
+                offsetLocal += tamano;
+            }
+
+            return nuevoSimbolo;
+        }
+
+        public Simbolo buscar(String nombre) {
+            // Búsqueda recursiva Top-Down desde el ámbito local hasta el global
+            for (int i = pilaTablas.size() - 1; i >= 0; i--) {
+                if (pilaTablas.get(i).containsKey(nombre)) {
+                    return pilaTablas.get(i).get(nombre);
+                }
+            }
+            return null; // No existe
+        }
+
+        private int obtenerTamano(String tipo, int dimensiones) {
+            if (tipo == null || tipo.equals("vacio")) return 0;
+            // Un arreglo (dimensión > 0) o un texto siempre pesarán 8 bytes por ser punteros
+            if (dimensiones > 0 || tipo.equals("texto")) return 8;
+            switch (tipo) {
+                case "logico": return 1;
+                case "entero": return 4;
+                case "decimal": return 8;
+                default: return 4;
+            }
+        }
+    }
+
+    // Instancia Global Semántica
+    static TablaSimbolos tablaSimbolos = new TablaSimbolos();
+
+    public static void main(String[] args) {
+            File archivo = null;
+
+            // 1. Modo por Argumento (CLI)
+            if (args.length > 0) {
+                String ruta = args[0].trim();
+                archivo = new File(ruta);
+
+                // Si pasan la ruta directa pero es inválida, abortamos como un compilador real
+                if (!archivo.exists() || archivo.isDirectory() || !archivo.canRead()) {
+                    System.out.println("Error fatal: El archivo especificado no es valido, es una carpeta o no existe: \"" + ruta + "\"");
+                    System.out.println("Uso correcto: java Leaf <ruta_del_archivo>");
+                    return;
+                }
+            }
+            // 2. Modo Interactivo (Consola)
+            else {
+                Scanner teclado = new Scanner(System.in);
+                while (true) {
+                    System.out.println("Escriba la ruta del archivo a compilar:");
+                    String ruta = teclado.nextLine().trim();
+                    archivo = new File(ruta);
+
+                    if (!archivo.exists()) {
+                        System.out.println("No se encontró el archivo \"" + ruta + "\". Intenta de nuevo.\n");
+                        continue;
+                    }
+                    if (archivo.isDirectory()) {
+                        System.out.println("\"" + ruta + "\" es una carpeta, no un archivo. Intenta de nuevo.\n");
+                        continue;
+                    }
+                    if (!archivo.canRead()) {
+                        System.out.println("No se puede leer el archivo \"" + ruta + "\". Revisa los permisos e intenta de nuevo.\n");
+                        continue;
+                    }
+                    break;
+                }
+            }
+
+            // A partir de aqui, el flujo es identico para ambos modos
+            try {
+                FileInputStream fis = new FileInputStream(archivo);
+                Leaf parser = new Leaf(fis, "UTF-8");
+                parser.programa();
+            } catch (java.io.FileNotFoundException e) {
+                System.out.println("No se encontró el archivo \"" + archivo + "\".");
+                return;
+            } catch (ParseException e) {
+                registrarErrorSintactico(tokenParaError(e), mensajeReporteError(e));
+            } catch (TokenMgrError e) {
+                totalErrores++;
+                String msg = e.getMessage();
+                if (msg != null && msg.contains("<EOF>")) {
+                    errores.add("Tipo de Error: Léxico : Parece que falta una comilla \" de cierre "
+                        + "en un texto. Revisa que cada texto empiece y termine con \". "
+                        + "Ejemplo: mostrar(\"hola\").");
+                } else {
+                    errores.add("Tipo de Error: Léxico : Se encontró un símbolo que no se pudo "
+                        + "interpretar en el código. Revisa que no haya caracteres inválidos.");
+                }
+            }
+
+            System.out.println("\n============================================");
+            if (errores.isEmpty()) {
+                System.out.println("  Programa válido. Sin errores.");
+            } else {
+                System.out.println("  Se encontraron " + totalErrores + " error(es):\n");
+                for (String err : errores) System.out.println("  " + err);
+            }
+            System.out.println("============================================");
+    }
+
+    // --- NUEVOS MÉTODOS DE REPORTE DIVIDIDOS ---
+
+    static void registrarErrorSintactico(Token t, String mensaje) {
         totalErrores++;
         String pos = (t != null)
-            ? "Linea " + t.beginLine + ", Columna " + t.beginColumn
-            : "Linea ?";
-        errores.add("Tipo de Error: Sintactico " + pos + " : " + mensaje);
+            ? "Línea " + t.beginLine + ", Columna " + t.beginColumn
+            : "Línea ?";
+        errores.add("Tipo de Error: Sintáctico " + pos + " : " + mensaje);
+    }
+
+    static void registrarErrorSemantico(Token t, String mensaje) {
+        totalErrores++;
+        String pos = (t != null)
+            ? "Línea " + t.beginLine + ", Columna " + t.beginColumn
+            : "Línea ?";
+        errores.add("Tipo de Error: Semántico " + pos + " : " + mensaje);
     }
 
     static Token tokenParaError(ParseException e) {
@@ -99,10 +249,10 @@ public class Leaf {
         if (t == null) return e.getMessage();
         String img = t.image;
 
-        if (t.kind == LeafConstants.DOLAR_SUELTO) return "Se encontro un '$' suelto o mal formado. Las variables deben llevar letras pegadas al simbolo (ejemplo: $edad).";
+        if (t.kind == LeafConstants.DOLAR_SUELTO) return "Se encontró un '$' suelto o mal formado. Las variables deben llevar letras pegadas al símbolo (ejemplo: $edad).";
 
         if (t.kind == LeafConstants.EOF)
-            return "Fin de archivo inesperado. Revisa si olvidaste colocar un \"<\" para cerrar un bloque (como un \"mientras\", \"para\", un \"si\" o una funcion), un parentesis \")\" o una instruccion con \".\".";
+            return "Fin de archivo inesperado. Revisa si olvidaste colocar un \"<\" para cerrar un bloque (como un \"mientras\", \"para\", un \"si\" o una función), un paréntesis \")\" o una instrucción con \".\".";
 
         if (e.expectedTokenSequences != null) {
             boolean punto = false, vale = false, como = false,
@@ -112,7 +262,8 @@ public class Leaf {
                     coma = false, entrega = false, de = false, hasta = false,
                     veces = false, flecha = false, indice = false, en = false,
                     id = false, numero = false, cadena = false,
-                    tipoDato = false, opRelacional = false;
+                    tipoDato = false, opRelacional = false,
+                    faltaMientras = false;
 
             for (int[] seq : e.expectedTokenSequences) {
                 for (int k : seq) {
@@ -150,86 +301,89 @@ public class Leaf {
                         case LeafConstants.MENOR_Q:
                         case LeafConstants.MAYOR_IQ:
                         case LeafConstants.MENOR_IQ: opRelacional = true; break;
+                        case LeafConstants.MIENTRAS: faltaMientras = true; break;
                     }
                 }
             }
 
-            if (punto)        return "Falta \".\" al final de la instruccion antes de \"" + img + "\". Ejemplo: mostrar($x).";
-            if (vale)         return "Se esperaba \"con valor de\" para asignar el valor. Se encontro: \"" + img + "\". Ejemplo: definir $x como entero con valor de 5.";
-            if (como)         return "Se esperaba \"como\" para indicar el tipo. Se encontro: \"" + img + "\". Ejemplo: definir $x como entero con valor de 0.";
-            if (entrega)      return "Falta la palabra \"entrega\" para indicar el tipo que devuelve la funcion. Se encontro: \"" + img + "\". Ejemplo: funcion suma() entrega entero > ... <";
+            if (punto)        return "Falta \".\" al final de la instrucción antes de \"" + img + "\". Ejemplo: mostrar($x).";
+            if (vale)         return "Se esperaba \"con valor de\" para asignar el valor. Se encontró: \"" + img + "\". Ejemplo: definir $x como entero con valor de 5.";
+            if (como)         return "Se esperaba \"como\" para indicar el tipo. Se encontró: \"" + img + "\". Ejemplo: definir $x como entero con valor de 0.";
+            if (entrega)      return "Falta la palabra \"entrega\" para indicar el tipo que devuelve la función. Se encontró: \"" + img + "\". Ejemplo: funcion suma() entrega entero > ... <";
 
             if (tipoDato) {
-                return "Lo que se encontro no es un tipo de dato valido (\"" + img + "\"). Tipos validos: entero, decimal, texto, logico, arreglo, vacio.";
+                return "Lo que se encontró no es un tipo de dato válido (\"" + img + "\"). Tipos válidos: entero, decimal, texto, logico, arreglo, vacio.";
             }
 
-            // Damos ALTA PRIORIDAD a evaluar literales (para atrapar constantes que usan variables)
             if (numero || cadena) {
                 if (t.kind == LeafConstants.VARIABLE || img.startsWith("$")) {
-                    return "Se esperaba un valor fijo (numero, texto, verdadero/falso). Las constantes no pueden inicializarse usando variables ni expresiones. Se encontro: \"" + img + "\".";
+                    return "Se esperaba un valor fijo (número, texto, verdadero/falso). Las constantes no pueden inicializarse usando variables ni expresiones. Se encontró: \"" + img + "\".";
                 }
             }
 
-            if (de)           return "Falta \"de\" en el ciclo \"para\". Se encontro: \"" + img + "\". Ejemplo: para $i de 1 hasta 10 > ... <";
-            if (hasta)        return "Falta \"hasta\" en el ciclo \"para\". Se encontro: \"" + img + "\". Ejemplo: para $i de 1 hasta 10 > ... <";
-            if (veces)        return "Falta la palabra \"veces\" en el ciclo \"repetir\". Se encontro: \"" + img + "\". Ejemplo: repetir 5 veces > ... <";
-            if (flecha)       return "Falta \"->\" despues del valor del \"caso\". Se encontro: \"" + img + "\". Ejemplo: caso 1 -> mostrar(\"uno\").";
-            if (indice)       return "Falta la palabra \"indice\" despues de \"quitar\". Se encontro: \"" + img + "\". Ejemplo: quitar indice [$i] de $lista.";
-            if (en)           return "Falta la palabra \"en\" en la instruccion \"agregar\". Se encontro: \"" + img + "\". Ejemplo: agregar 5 en $lista.";
-            if (cierraB)      return "Falta \"<\" para cerrar el bloque. Revisa que cada \">\" tenga su \"<\" correspondiente. Se encontro: \"" + img + "\"";
+            if (de)           return "Falta \"de\" en el ciclo \"para\". Se encontró: \"" + img + "\". Ejemplo: para $i de 1 hasta 10 > ... <";
+            if (hasta)        return "Falta \"hasta\" en el ciclo \"para\". Se encontró: \"" + img + "\". Ejemplo: para $i de 1 hasta 10 > ... <";
+            if (veces)        return "Falta la palabra \"veces\" en el ciclo \"repetir\". Se encontró: \"" + img + "\". Ejemplo: repetir 5 veces > ... <";
+            if (flecha)       return "Falta \"->\" después del valor del \"caso\". Se encontró: \"" + img + "\". Ejemplo: caso 1 -> mostrar(\"uno\").";
+            if (indice)       return "Falta la palabra \"índice\" después de \"quitar\". Se encontró: \"" + img + "\". Ejemplo: quitar indice [$i] de $lista.";
+            if (en)           return "Falta la palabra \"en\" en la instrucción \"agregar\". Se encontró: \"" + img + "\". Ejemplo: agregar 5 en $lista.";
+            if (cierraB)      return "Falta \"<\" para cerrar el bloque. Revisa que cada \">\" tenga su \"<\" correspondiente. Se encontró: \"" + img + "\"";
 
             if (abreB) {
-                return "Falta \">\" para abrir el bloque despues de la condicion o cabecera. Se encontro: \"" + img + "\"";
+                return "Falta \">\" para abrir el bloque después de la condición o cabecera. Se encontró: \"" + img + "\"";
             }
 
             if (parenC) {
                 if (t.kind == LeafConstants.VARIABLE || img.startsWith("$")) {
-                    return "Falta \")\" para cerrar el parentesis. (Nota: Si estas dentro de una condicion, verifica que no hayas olvidado colocar un operador como \"Y\" u \"O\" antes de \"" + img + "\").";
+                    return "Falta \")\" para cerrar el paréntesis. (Nota: Si estás dentro de una condición, verifica que no hayas olvidado colocar un operador como \"Y\" u \"O\" antes de \"" + img + "\").";
                 }
                 if (img.equals(">") || img.equals("<")) {
-                    return "Parece que usaste \"" + img + "\" dentro de los parentesis. Recuerda que para comparar matematicamente debes usar \"mayor que\" o \"menor que\", no simbolos.";
+                    return "Parece que usaste \"" + img + "\" dentro de los paréntesis. Recuerda que para comparar matemáticamente debes usar \"mayor que\" o \"menor que\", no símbolos.";
                 }
                 if (img.equals("(")) {
-                    return "Se encontro un \"(\" inesperado. Si intentabas acceder a un arreglo usa corchetes \"[\". Si es una llamada a funcion o expresion, revisa la sintaxis.";
+                    return "Se encontró un \"(\" inesperado. Si intentabas acceder a un arreglo usa corchetes \"[\". Si es una llamada a función o expresión, revisa la sintaxis.";
                 }
-                return "Falta \")\" para cerrar el parentesis. Se encontro: \"" + img + "\".";
+                return "Falta \")\" para cerrar el paréntesis. Se encontró: \"" + img + "\".";
             }
 
-            if (parenA)       return "Falta \"(\" para abrir el parentesis. Se encontro: \"" + img + "\".";
-            if (corchC)       return "Falta \"]\" para cerrar el indice o el arreglo. Se encontro: \"" + img + "\".";
+            if (parenA)       return "Falta \"(\" para abrir el paréntesis. Se encontró: \"" + img + "\".";
+            if (corchC)       return "Falta \"]\" para cerrar el índice o el arreglo. Se encontró: \"" + img + "\".";
 
             if (corchA) {
                 if (img.equals("(")) {
-                    return "Se esperaban corchetes \"[\" para acceder al indice del arreglo o definirlo, pero se encontro \"(\". Ejemplo: $lista[0].";
+                    return "Se esperaban corchetes \"[\" para acceder al índice del arreglo o definirlo, pero se encontró \"(\". Ejemplo: $lista[0].";
                 }
-                return "Falta \"[\" para indicar un indice o definir un arreglo. Se encontro: \"" + img + "\". Ejemplo: $lista[0] o arreglo[entero].";
+                return "Falta \"[\" para indicar un índice o definir un arreglo. Se encontró: \"" + img + "\". Ejemplo: $lista[0] o arreglo[entero].";
             }
 
-            if (variable)     return "Se esperaba una variable. Recuerda que los nombres de variables y constantes SIEMPRE deben empezar con \"$\" seguido de letras. Se encontro: \"" + img + "\". Ejemplo correcto: $edad.";
-            if (coma)         return "Falta \",\" para separar los elementos de la lista. Se encontro: \"" + img + "\". Ejemplo: mostrar($a, $b).";
+            if (variable)     return "Se esperaba una variable. Recuerda que los nombres de variables y constantes SIEMPRE deben empezar con \"$\" seguido de letras. Se encontró: \"" + img + "\". Ejemplo correcto: $edad.";
+            if (coma)         return "Falta \",\" para separar los elementos de la lista. Se encontró: \"" + img + "\". Ejemplo: mostrar($a, $b).";
 
             if (opRelacional) {
                 if (img.equals(">") || img.equals("<")) {
-                    return "Se esperaba un operador de comparacion. En Leaf, los simbolos \">\" y \"<\" se usan exclusivamente para abrir o cerrar bloques, no para comparar. Usa \"mayor que\" o \"menor que\".";
+                    return "Se esperaba un operador de comparación. En Leaf, los símbolos \">\" y \"<\" se usan exclusivamente para abrir o cerrar bloques, no para comparar. Usa \"mayor que\" o \"menor que\".";
                 }
-                return "Se esperaba un operador de comparacion (igual que, diferente que, mayor que, menor que, mayor o igual que, menor o igual que). Se encontro: \"" + img + "\".";
+                return "Se esperaba un operador de comparación (igual que, diferente que, mayor que, menor que, mayor o igual que, menor o igual que). Se encontró: \"" + img + "\".";
             }
 
-            if (cadena)       return "Se esperaba un texto entre comillas. Se encontro: \"" + img + "\". Ejemplo: \"hola\".";
-            if (numero)       return "Se esperaba un numero. Se encontro: \"" + img + "\".";
+            if (cadena)       return "Se esperaba un texto entre comillas. Se encontró: \"" + img + "\". Ejemplo: \"hola\".";
+            if (numero)       return "Se esperaba un número. Se encontró: \"" + img + "\".";
 
             if (id) {
                 if (t.kind == LeafConstants.VARIABLE || img.startsWith("$")) {
-                    return "Los nombres de funcion no deben llevar \"$\". El simbolo \"$\" es de uso exclusivo para las variables. Ejemplo: funcion calcular() (no funcion " + img + ").";
+                    return "Los nombres de función no deben llevar \"$\". El símbolo \"$\" es de uso exclusivo para las variables. Ejemplo: funcion calcular() (no funcion " + img + ").";
                 }
-                return "Se esperaba un nombre valido (de funcion). Se encontro: \"" + img + "\".";
+                return "Se esperaba un nombre válido (de función). Se encontró: \"" + img + "\".";
+            }
+
+            if (faltaMientras) {
+                return "Falta la palabra \"mientras\" después del bloque \"hacer\". Se encontró: \"" + img + "\". Ejemplo: hacer > ... < mientras ($x menor que 10).";
             }
         }
-        return "\"" + img + "\" no es valido aqui. Revisa la sintaxis de la instruccion.";
+        return "\"" + img + "\" no es válido aquí. Revisa la sintaxis de la instrucción.";
     }
 }
 PARSER_END(Leaf)
-
 
 /* ============================================================
  *  LEXICO
@@ -291,6 +445,7 @@ TOKEN : {
     | <DE:         "de">
     | <INDICE:     "indice">
     | <TAMANO:     "longitud">
+    | < HACER: "hacer" >
 }
 
 /* Operadores y puntuacion */
@@ -353,9 +508,9 @@ MORE : { <CADENA_INICIO: "\""> : IN_CADENA }
       {
           Leaf.totalErrores++;
           String esc = image.substring(image.length() - 2);
-          Leaf.errores.add("Tipo de Error: Lexico Linea " + input_stream.getEndLine()
+          Leaf.errores.add("Tipo de Error: Léxico Línea " + input_stream.getEndLine()
               + ", Columna " + (input_stream.getEndColumn() - 1)
-              + " : Secuencia de escape no valida: \"" + esc + "\". Los escapes permitidos "
+              + " : Secuencia de escape no válida: \"" + esc + "\". Los escapes permitidos "
               + "dentro de un texto son: \\n, \\t, \\r, \\\", \\\\ y \\0.");
       }
     | <CADENA_CHAR: ~["\"","\\"]>
@@ -370,20 +525,19 @@ SKIP : {
     < ERROR_LEXICO: ~[] >
     {
         Leaf.totalErrores++;
-        String msgError = "Caracter no reconocido: '" + image + "'. Revisa que no se te haya colado un simbolo que no pertenece al lenguaje.";
+        String msgError = "Carácter no reconocido: '" + image + "'. Revisa que no se te haya colado un símbolo que no pertenece al lenguaje.";
 
-        // Intercepcion especifica de errores lexicos amigables
         if (image.equals(";")) {
             msgError = "En Leaf las instrucciones terminan con punto (\".\"), no con punto y coma (\";\").";
         } else if (image.equals("=")) {
-            msgError = "El simbolo \"=\" no es valido en Leaf. Usa \"con valor de\" para asignar y \"igual que\" para comparar.";
+            msgError = "El símbolo \"=\" no es válido en Leaf. Usa \"con valor de\" para asignar y \"igual que\" para comparar.";
         } else if (image.equals("{") || image.equals("}")) {
-            msgError = "En Leaf los bloques de codigo se abren con \">\" y se cierran con \"<\", no uses llaves \"{}\".";
+            msgError = "En Leaf los bloques de código se abren con \">\" y se cierran con \"<\", no uses llaves \"{}\".";
         } else if (image.equals("&") || image.equals("|") || image.equals("!")) {
-            msgError = "Para operadores logicos usa las palabras \"Y\", \"O\", o \"NO\" en lugar de simbolos.";
+            msgError = "Para operadores lógicos usa las palabras \"Y\", \"O\", o \"NO\" en lugar de símbolos.";
         }
 
-        Leaf.errores.add("Tipo de Error: Lexico Linea " + input_stream.getBeginLine()
+        Leaf.errores.add("Tipo de Error: Léxico Línea " + input_stream.getBeginLine()
             + ", Columna " + input_stream.getBeginColumn()
             + " : " + msgError);
     }
@@ -430,9 +584,9 @@ void programa() throws ParseException {
     while (!pilaAberturas.isEmpty()) {
         Token t = pilaAberturas.pop();
         totalErrores++;
-        errores.add("Tipo de Error: Sintactico Linea " + t.beginLine
+        errores.add("Tipo de Error: Sintáctico Línea " + t.beginLine
             + ", Columna " + t.beginColumn
-            + " : Bloque abierto con \">\" en la linea " + t.beginLine
+            + " : Bloque abierto con \">\" en la línea " + t.beginLine
             + " nunca fue cerrado con \"<\".");
     }
 
@@ -444,7 +598,7 @@ void def_funcion_segura() {
     try {
         def_funcion();
     } catch (ParseException e) {
-        registrarError(tokenParaError(e),
+        registrarErrorSintactico(tokenParaError(e),
                        mensajeReporteError(e));
         saltarHasta(CIERRA_B, EOF);
         if (getToken(1).kind == CIERRA_B) getNextToken();
@@ -454,63 +608,66 @@ void def_funcion_segura() {
 JAVACODE
 String mensajeInicioInvalido(Token look) {
     switch (look.kind) {
+        case FUNCION:
+            return "No se permite declarar funciones dentro de otra función, ciclo o condicional. Las funciones solo pueden definirse en el nivel principal del programa.";
+
         case DOLAR_SUELTO:
-            return "Se encontro un '$' suelto. Las variables deben llevar letras pegadas al simbolo (ejemplo: $edad).";
+            return "Se encontró un '$' suelto. Las variables deben llevar letras pegadas al símbolo (ejemplo: $edad).";
 
         case NUMERO:
         case DEC:
-            return "Una instruccion no puede comenzar con un numero (\"" + look.image
-                + "\"). Si quieres usar ese valor, guardalo en una variable primero. "
+            return "Una instrucción no puede comenzar con un número (\"" + look.image
+                + "\"). Si quieres usar ese valor, guárdalo en una variable primero. "
                 + "Ejemplo: definir $x como entero con valor de " + look.image + ".";
 
         case CADENA:
-            return "Una instruccion no puede comenzar con un texto suelto (" + look.image
+            return "Una instrucción no puede comenzar con un texto suelto (" + look.image
                 + "). ¿Quisiste mostrarlo con mostrar(...) o guardarlo en una variable?";
 
         case SI_LIT:
         case NO_LIT:
-            return "Una instruccion no puede comenzar con un valor logico suelto (\""
-                + look.image + "\"). Guardalo en una variable o usalo dentro de una condicion.";
+            return "Una instrucción no puede comenzar con un valor lógico suelto (\""
+                + look.image + "\"). Guárdalo en una variable o úsalo dentro de una condición.";
 
         case CASO:
-            return "\"caso\" solo puede usarse dentro de un bloque \"segun\". "
+            return "\"caso\" solo puede usarse dentro de un bloque \"según\". "
                 + "Ejemplo: segun ($x) > caso 1 -> mostrar(\"uno\"). <";
 
         case DEFECTO:
-            return "\"defecto\" solo puede usarse dentro de un bloque \"segun\". "
+            return "\"defecto\" solo puede usarse dentro de un bloque \"según\". "
                 + "Ejemplo: segun ($x) > caso 1 -> mostrar(\"uno\"). defecto -> mostrar(\"otro\"). <";
 
         case SINO:
         case SINO_SI:
             return "\"" + look.image + "\" no puede aparecer sin un \"si\" antes. "
-                + "Debe ir inmediatamente despues del bloque \"<\" de un \"si\".";
+                + "Debe ir inmediatamente después del bloque \"<\" de un \"si\".";
 
         case MAS: case POR: case DIV: case POT: case MOD: case MENOS: case RAIZ:
-            return "Una instruccion no puede comenzar con el operador \"" + look.image
+            return "Una instrucción no puede comenzar con el operador \"" + look.image
                 + "\". Falta el valor a la izquierda de ese operador.";
 
         case IGUAL: case DIF: case MAYOR_Q: case MENOR_Q: case MAYOR_IQ: case MENOR_IQ:
-            return "Una instruccion no puede comenzar con un operador de comparacion (\""
-                + look.image + "\"). Una comparacion debe ir dentro de un \"si\", \"mientras\", etc.";
+            return "Una instrucción no puede comenzar con un operador de comparación (\""
+                + look.image + "\"). Una comparación debe ir dentro de un \"si\", \"mientras\", etc.";
 
         case Y: case O:
-            return "Una instruccion no puede comenzar con el operador logico \"" + look.image
-                + "\". Falta la condicion a la izquierda.";
+            return "Una instrucción no puede comenzar con el operador lógico \"" + look.image
+                + "\". Falta la condición a la izquierda.";
 
         case NO:
-            return "\"NO\" solo se usa dentro de una condicion; no puede empezar una instruccion por si solo.";
+            return "\"NO\" solo se usa dentro de una condición; no puede empezar una instrucción por sí solo.";
 
         case VALE:
-            return "\"con valor de\" no puede aparecer aqui; solo se usa despues de \"definir $var como <tipo>\" o de una variable en una asignacion.";
+            return "\"con valor de\" no puede aparecer aquí; solo se usa después de \"definir $var como <tipo>\" o de una variable en una asignación.";
 
         case COMO:
-            return "\"como\" no puede aparecer aqui; solo se usa en una declaracion. Ejemplo: definir $x como entero con valor de 0.";
+            return "\"como\" no puede aparecer aquí; solo se usa en una declaración. Ejemplo: definir $x como entero con valor de 0.";
 
         case ENTREGA:
-            return "\"entrega\" solo se usa en la cabecera de una funcion. Ejemplo: funcion f() entrega entero > ... <";
+            return "\"entrega\" solo se usa en la cabecera de una función. Ejemplo: funcion f() entrega entero > ... <";
 
         case FLECHA:
-            return "\"->\" solo se usa despues del valor de un \"caso\" dentro de un \"segun\". Ejemplo: caso 1 -> mostrar(\"uno\").";
+            return "\"->\" solo se usa después del valor de un \"caso\" dentro de un \"según\". Ejemplo: caso 1 -> mostrar(\"uno\").";
 
         case DE:
             return "\"de\" solo se usa en la cabecera del ciclo \"para\". Ejemplo: para $i de 1 hasta 10 > ... <";
@@ -519,45 +676,42 @@ String mensajeInicioInvalido(Token look) {
             return "\"hasta\" solo se usa en la cabecera del ciclo \"para\". Ejemplo: para $i de 1 hasta 10 > ... <";
 
         case VECES:
-            return "\"veces\" solo se usa despues de un numero en el ciclo \"repetir\". Ejemplo: repetir 5 veces > ... <";
+            return "\"veces\" solo se usa después de un número en el ciclo \"repetir\". Ejemplo: repetir 5 veces > ... <";
 
         case PASO:
-            return "\"paso\" solo se usa en la cabecera del ciclo \"para\", despues de \"hasta\". Ejemplo: para $i de 1 hasta 10 paso 2 > ... <";
+            return "\"paso\" solo se usa en la cabecera del ciclo \"para\", después de \"hasta\". Ejemplo: para $i de 1 hasta 10 paso 2 > ... <";
 
         case EN:
-            return "\"en\" solo se usa en la instruccion \"agregar\". Ejemplo: agregar 5 en $lista.";
+            return "\"en\" solo se usa en la instrucción \"agregar\". Ejemplo: agregar 5 en $lista.";
 
         case INDICE:
-            return "\"indice\" solo se usa despues de \"quitar\". Ejemplo: quitar indice [0] de $lista.";
+            return "\"índice\" solo se usa después de \"quitar\". Ejemplo: quitar indice [0] de $lista.";
 
         case ENTERO_T: case DECIMAL_T: case TEXTO_T: case LOGICO_T: case VACIO_T: case ARREGLO_T:
-            return "Una instruccion no puede comenzar con un tipo de dato (\"" + look.image
-                + "\"); los tipos solo se usan despues de \"como\". Ejemplo: definir $x como "
+            return "Una instrucción no puede comenzar con un tipo de dato (\"" + look.image
+                + "\"); los tipos solo se usan después de \"como\". Ejemplo: definir $x como "
                 + look.image + " con valor de ...";
 
         case PUNTO:
-            return "Se encontro un \".\" sin ninguna instruccion antes; puede que sobre un punto de la instruccion anterior.";
+            return "Se encontró un \".\" sin ninguna instrucción antes; puede que sobre un punto de la instrucción anterior.";
 
         case COMA:
-            return "Se encontro una \",\" fuera de lugar; las comas solo separan elementos dentro de parentesis o corchetes.";
+            return "Se encontró una \",\" fuera de lugar; las comas solo separan elementos dentro de paréntesis o corchetes.";
 
         case PAREN_A:
-            return "Una instruccion no puede empezar con \"(\" suelto. ¿Quisiste llamar a una funcion, o usarlo dentro de mostrar, definir, si, etc.?";
+            return "Una instrucción no puede empezar con \"(\" suelto. ¿Quisiste llamar a una función, o usarlo dentro de mostrar, definir, si, etc.?";
 
         case PAREN_C:
-            return "Se encontro un \")\" sin su \"(\" correspondiente.";
+            return "Se encontró un \")\" sin su \"(\" correspondiente.";
 
         case CORCH_A:
-            return "Un corchete \"[\" no puede empezar una instruccion; los corchetes se usan para arreglos o para acceder a un indice. Ejemplo: $lista[0].";
-
-        case CORCH_C:
-            return "Se encontro un \"]\" sin su \"[\" correspondiente.";
-
-        case ABRE_B:
-            return "Se encontro un \">\" sin ninguna instruccion (si, mientras, para, funcion, segun, etc.) que lo abra.";
+            return "Un corchete \"[\" no puede empezar una instrucción; los corchetes se usan para arreglos o para acceder a un índice. Ejemplo: $lista[0].";
 
         case CIERRA_B:
-            return "Se encontro un \"<\" de mas; revisa que no haya un bloque cerrado dos veces.";
+            if (pilaAberturas.isEmpty()) {
+                return "Se encontró un \"<\" de más; revisa que no haya un bloque cerrado dos veces.";
+            }
+            return null;
 
         default:
             return null;
@@ -572,27 +726,24 @@ void sentencia_segura() {
 
     String msgEspecial = mensajeInicioInvalido(look);
     if (msgEspecial != null) {
-        registrarError(look, msgEspecial);
+        registrarErrorSintactico(look, msgEspecial);
         getNextToken();
         if (look.kind == CIERRA_B && !pilaAberturas.isEmpty()) pilaAberturas.pop();
 
-        switch (look.kind) {
-            case PUNTO: case COMA: case PAREN_C: case CORCH_C:
-            case ABRE_B: case CIERRA_B:
-                return;
-        }
-
-        saltarHasta(PUNTO, CIERRA_B, EOF);
+        saltarHasta(PUNTO, CIERRA_B, ABRE_B, EOF);
         if (getToken(1).kind == PUNTO) getNextToken();
         return;
     }
 
+    if (look.kind == CIERRA_B) return;
+
     try {
         sentencia();
     } catch (ParseException e) {
-        registrarError(tokenParaError(e),
+        registrarErrorSintactico(tokenParaError(e),
                        mensajeReporteError(e));
-        saltarHasta(PUNTO, CIERRA_B, EOF);
+
+        saltarHasta(PUNTO, CIERRA_B, ABRE_B, EOF);
         if (getToken(1).kind == PUNTO) getNextToken();
     }
 }
@@ -610,7 +761,10 @@ void sentencia() :
           condicional()
 
     | LOOKAHEAD(<MIENTRAS>)
-          ciclo_mientras()
+          despachador_mientras()
+
+    | LOOKAHEAD(<HACER>)
+          ciclo_hacer_mientras()
 
     | LOOKAHEAD(<REPETIR>)
           ciclo_repetir()
@@ -648,14 +802,57 @@ void sentencia() :
     | LOOKAHEAD( <ID> <PAREN_A> )
           llamada_funcion() <PUNTO>
 
-    | LOOKAHEAD(<FUNCION>)
-          def_funcion_segura()
+    | LOOKAHEAD(<ABRE_B>)
+          bloque_huerfano()
 }
 
 
 /* ============================================================
- *  BLOQUE
+ *  BLOQUE Y DESPACHADORES
  * ============================================================ */
+
+JAVACODE
+void despachador_mientras() {
+    boolean esHacer = false;
+    int i = 1;
+    while (true) {
+        Token t = getToken(i);
+        if (t.kind == EOF || t.kind == ABRE_B || t.kind == CIERRA_B) break;
+        if (t.kind == PUNTO) {
+            esHacer = true;
+            break;
+        }
+        i++;
+    }
+
+    if (esHacer) {
+        cola_huerfana_hacer();
+    } else {
+        ciclo_mientras();
+    }
+}
+
+JAVACODE
+void bloque_huerfano() {
+    registrarErrorSintactico(getToken(1), "Se encontró un bloque \"> ... <\" huérfano. Posiblemente escribiste mal la instrucción que lo abre (como 'hacer', 'si', o 'mientras').");
+    bloque();
+}
+
+JAVACODE
+void cola_huerfana_hacer() {
+    try {
+        jj_consume_token(MIENTRAS);
+        jj_consume_token(PAREN_A);
+        condicion();
+        jj_consume_token(PAREN_C);
+        jj_consume_token(PUNTO);
+        registrarErrorSintactico(getToken(0), "Se encontró un \"mientras\" con punto final. Parece la condición de un ciclo \"hacer-mientras\", pero faltó la palabra \"hacer\" al inicio.");
+    } catch (ParseException e) {
+        registrarErrorSintactico(tokenParaError(e), "Error en la estructura huérfana: " + mensajeReporteError(e));
+        saltarHasta(PUNTO, EOF);
+        if (getToken(1).kind == PUNTO) getNextToken();
+    }
+}
 
 JAVACODE
 void bloque() {
@@ -663,18 +860,20 @@ void bloque() {
         Token abreToken = getToken(1);
         jj_consume_token(ABRE_B);
         pilaAberturas.push(abreToken);
+        tablaSimbolos.entrarBloque("Bloque");
     } catch (ParseException e) {
         Token t = getToken(1);
         if (t.kind == ID && (t.image.equalsIgnoreCase("aumentando") || t.image.equalsIgnoreCase("incrementando"))) {
-            registrarError(t, "Se esperaba la palabra \"paso\" para definir el incremento del ciclo \"para\". Se encontro: \"" + t.image + "\".");
+            registrarErrorSintactico(t, "Se esperaba la palabra \"paso\" para definir el incremento del ciclo \"para\". Se encontró: \"" + t.image + "\".");
         } else {
-            registrarError(tokenParaError(e), "Falta \">\" para abrir el bloque. Ejemplo: si ($x igual que 1) > ... <");
+            registrarErrorSintactico(tokenParaError(e), "Falta \">\" para abrir el bloque. Ejemplo: si ($x igual que 1) > ... <");
         }
         saltarHasta(ABRE_B, CIERRA_B, EOF);
         if (getToken(1).kind == ABRE_B) {
             Token abreToken = getToken(1);
             getNextToken();
             pilaAberturas.push(abreToken);
+            tablaSimbolos.entrarBloque("BloqueError");
         } else return;
     }
 
@@ -689,21 +888,24 @@ void bloque() {
         try {
             jj_consume_token(CIERRA_B);
             if (!pilaAberturas.isEmpty()) pilaAberturas.pop();
+            tablaSimbolos.salirBloque();
         } catch (ParseException e) { /* no puede llegar aqui */ }
     } else if (getToken(1).kind != EOF) {
-        registrarError(getToken(1),
+        registrarErrorSintactico(getToken(1),
                        "Falta \"<\" para cerrar el bloque. Cada \">\" debe tener su \"<\" al final.");
     }
 }
 
 JAVACODE
 void bloque_caso() {
+    tablaSimbolos.entrarBloque("Caso");
     while (true) {
         Token look = getToken(1);
         if (look.kind == CASO || look.kind == DEFECTO
                 || look.kind == CIERRA_B || look.kind == EOF) break;
         sentencia_segura();
     }
+    tablaSimbolos.salirBloque();
 }
 
 
@@ -712,15 +914,57 @@ void bloque_caso() {
  * ============================================================ */
 
 void declaracion() :
-{}
+{ String nombreVar; String tipoCompleto; }
 {
-    <DEFINIR> variable() <COMO> tipo() <VALE> expresion()
+    <DEFINIR> nombreVar=variable() <COMO> tipoCompleto=tipo() <VALE> expresion()
+    {
+        String tipoBase = tipoCompleto;
+        String categoria = "variable";
+        int dimensiones = 0;
+
+        while (tipoBase.startsWith("arreglo:")) {
+            categoria = "arreglo";
+            dimensiones++;
+            tipoBase = tipoBase.substring(8);
+        }
+
+        if (tipoBase.equals("vacio")) {
+            registrarErrorSemantico(getToken(0), "El tipo de dato \"vacio\" es exclusivo para funciones. Una variable no puede ser vacía.");
+        } else {
+            Simbolo existente = tablaSimbolos.buscarLocal(nombreVar);
+            if (existente != null) {
+                registrarErrorSemantico(getToken(0), "El identificador \"" + nombreVar + "\" ya ha sido declarado en este ámbito como " + existente.categoria + ".");
+            } else {
+                tablaSimbolos.insertar(nombreVar, tipoBase, categoria, getToken(0).beginLine, dimensiones);
+            }
+        }
+    }
 }
 
 void declaracion_constante() :
-{}
+{ String nombreVar; String tipoCompleto; }
 {
-    <CONSTANTE> variable() <COMO> tipo() <VALE> literal()
+    <CONSTANTE> nombreVar=variable() <COMO> tipoCompleto=tipo() <VALE> literal()
+    {
+        String tipoBase = tipoCompleto;
+        int dimensiones = 0;
+
+        while (tipoBase.startsWith("arreglo:")) {
+            dimensiones++;
+            tipoBase = tipoBase.substring(8);
+        }
+
+        if (tipoBase.equals("vacio")) {
+            registrarErrorSemantico(getToken(0), "El tipo de dato \"vacio\" es exclusivo para funciones. Una constante no puede ser vacía.");
+        } else {
+            Simbolo existente = tablaSimbolos.buscarLocal(nombreVar);
+            if (existente != null) {
+                registrarErrorSemantico(getToken(0), "El identificador \"" + nombreVar + "\" ya ha sido declarado en este ámbito como " + existente.categoria + ".");
+            } else {
+                tablaSimbolos.insertar(nombreVar, tipoBase, "constante", getToken(0).beginLine, dimensiones);
+            }
+        }
+    }
 }
 
 void asignacion() :
@@ -742,16 +986,16 @@ void identificador_asignable() :
  *  IDENTIFICADORES
  * ============================================================ */
 
-void variable() :
-{}
+String variable() :
+{ Token t; }
 {
-    <VARIABLE>
+    t=<VARIABLE> { return t.image; }
 }
 
-void nombre_funcion() :
-{}
+String nombre_funcion() :
+{ Token t; }
 {
-    <ID>
+    t=<ID> { return t.image; }
 }
 
 
@@ -833,21 +1077,22 @@ void literal_logico() :
  *  TIPOS
  * ============================================================ */
 
-void tipo_arreglo() :
-{}
+String tipo_arreglo() :
+{ String tInt; }
 {
-    <ARREGLO_T> <CORCH_A> tipo() <CORCH_C>
+    <ARREGLO_T> <CORCH_A> tInt=tipo() <CORCH_C>
+    { return "arreglo:" + tInt; }
 }
 
-void tipo() :
-{}
+String tipo() :
+{ Token t; String tArr; }
 {
-      <ENTERO_T>
-    | <DECIMAL_T>
-    | <TEXTO_T>
-    | <LOGICO_T>
-    | <VACIO_T>
-    | tipo_arreglo()
+      t=<ENTERO_T>  { return t.image; }
+    | t=<DECIMAL_T> { return t.image; }
+    | t=<TEXTO_T>   { return t.image; }
+    | t=<LOGICO_T>  { return t.image; }
+    | t=<VACIO_T>   { return t.image; }
+    | tArr=tipo_arreglo() { return tArr; }
 }
 
 
@@ -898,8 +1143,8 @@ void condicional() {
         condicion();
         jj_consume_token(PAREN_C);
     } catch (ParseException e) {
-        registrarError(tokenParaError(e),
-            "Error en la condicion del \"si\": " + mensajeReporteError(e));
+        registrarErrorSintactico(tokenParaError(e),
+            "Error en la condición del \"si\": " + mensajeReporteError(e));
         saltarHasta(ABRE_B, EOF);
     }
     bloque();
@@ -911,8 +1156,8 @@ void condicional() {
             condicion();
             jj_consume_token(PAREN_C);
         } catch (ParseException e) {
-            registrarError(tokenParaError(e),
-                "Error en la condicion del \"sino si\": " + mensajeReporteError(e));
+            registrarErrorSintactico(tokenParaError(e),
+                "Error en la condición del \"sino si\": " + mensajeReporteError(e));
             saltarHasta(ABRE_B, EOF);
         }
         bloque();
@@ -934,21 +1179,23 @@ void segun() {
         Token abreToken = getToken(1);
         jj_consume_token(ABRE_B);
         pilaAberturas.push(abreToken);
+        tablaSimbolos.entrarBloque("Segun");
     } catch (ParseException e) {
-        registrarError(tokenParaError(e),
-            "Error en la expresion del \"segun\": " + mensajeReporteError(e));
+        registrarErrorSintactico(tokenParaError(e),
+            "Error en la expresión del \"según\": " + mensajeReporteError(e));
         saltarHasta(ABRE_B, EOF);
         if (getToken(1).kind == ABRE_B) {
             Token abreToken = getToken(1);
             getNextToken();
             pilaAberturas.push(abreToken);
+            tablaSimbolos.entrarBloque("SegunError");
         } else return;
     }
 
     Token look = getToken(1);
     if (look.kind != CASO && look.kind != DEFECTO
             && look.kind != CIERRA_B && look.kind != EOF)
-        registrarError(look, "El bloque \"segun\" debe tener al menos un \"caso\". Ejemplo: caso 1 -> mostrar(\"uno\"). <");
+        registrarErrorSintactico(look, "El bloque \"según\" debe tener al menos un \"caso\". Ejemplo: caso 1 -> mostrar(\"uno\"). <");
 
     while (true) {
         look = getToken(1);
@@ -956,7 +1203,7 @@ void segun() {
         try {
             caso();
         } catch (ParseException e) {
-            registrarError(tokenParaError(e),
+            registrarErrorSintactico(tokenParaError(e),
                 "Error dentro de un \"caso\": " + mensajeReporteError(e));
             saltarHasta(CASO, DEFECTO, CIERRA_B, EOF);
         }
@@ -969,7 +1216,7 @@ void segun() {
             jj_consume_token(FLECHA);
             bloque_caso();
         } catch (ParseException e) {
-            registrarError(tokenParaError(e),
+            registrarErrorSintactico(tokenParaError(e),
                 "Error dentro del \"defecto\": " + mensajeReporteError(e));
             saltarHasta(CIERRA_B, EOF);
         }
@@ -979,10 +1226,11 @@ void segun() {
         try {
             jj_consume_token(CIERRA_B);
             if (!pilaAberturas.isEmpty()) pilaAberturas.pop();
+            tablaSimbolos.salirBloque();
         } catch (ParseException e) { /* no puede llegar aqui */ }
     } else if (getToken(1).kind != EOF) {
-        registrarError(getToken(1),
-            "Falta \"<\" para cerrar el bloque \"segun\". Revisa que todos los \"caso\" esten bien cerrados.");
+        registrarErrorSintactico(getToken(1),
+            "Falta \"<\" para cerrar el bloque \"según\". Revisa que todos los \"caso\" estén bien cerrados.");
     }
 }
 
@@ -1000,11 +1248,36 @@ void ciclo_mientras() {
         condicion();
         jj_consume_token(PAREN_C);
     } catch (ParseException e) {
-        registrarError(tokenParaError(e),
-            "Error en la condicion del \"mientras\": " + mensajeReporteError(e));
+        registrarErrorSintactico(tokenParaError(e),
+            "Error en la condición del \"mientras\": " + mensajeReporteError(e));
         saltarHasta(ABRE_B, EOF);
     }
     bloque();
+}
+
+JAVACODE
+void ciclo_hacer_mientras() {
+    try {
+        jj_consume_token(HACER);
+    } catch (ParseException e) {
+        registrarErrorSintactico(tokenParaError(e),
+            "Error al iniciar el ciclo \"hacer\": " + mensajeReporteError(e));
+        saltarHasta(ABRE_B, EOF);
+    }
+
+    bloque();
+
+    try {
+        jj_consume_token(MIENTRAS);
+        jj_consume_token(PAREN_A);
+        condicion();
+        jj_consume_token(PAREN_C);
+        jj_consume_token(PUNTO);
+    } catch (ParseException e) {
+        registrarErrorSintactico(tokenParaError(e), "Error en el cierre del ciclo \"hacer-mientras\". Revisa la condición y el punto final: " + mensajeReporteError(e));
+        saltarHasta(PUNTO, EOF);
+        if (getToken(1).kind == PUNTO) getNextToken();
+    }
 }
 
 JAVACODE
@@ -1014,7 +1287,7 @@ void ciclo_repetir() {
         expresion();
         jj_consume_token(VECES);
     } catch (ParseException e) {
-        registrarError(tokenParaError(e),
+        registrarErrorSintactico(tokenParaError(e),
             "Error en el \"repetir\": " + mensajeReporteError(e));
         saltarHasta(ABRE_B, EOF);
     }
@@ -1036,7 +1309,7 @@ void ciclo_para() {
             expresion();
         }
     } catch (ParseException e) {
-        registrarError(tokenParaError(e),
+        registrarErrorSintactico(tokenParaError(e),
             "Error en la cabecera del \"para\": " + mensajeReporteError(e));
         saltarHasta(ABRE_B, EOF);
     }
@@ -1052,68 +1325,106 @@ JAVACODE
 void def_funcion() {
     try {
         jj_consume_token(FUNCION);
-        nombre_funcion();
+        String nombreFunc = nombre_funcion();
+
+        Simbolo simFunc = tablaSimbolos.insertar(nombreFunc, "vacio", "funcion", getToken(0).beginLine, 0);
+        if (simFunc == null) {
+            registrarErrorSemantico(getToken(0), "La función \"" + nombreFunc + "\" ya existe.");
+        }
+
+        tablaSimbolos.resetearOffsetLocal();
+        tablaSimbolos.entrarBloque(nombreFunc);
+
         jj_consume_token(PAREN_A);
 
         Token look = getToken(1);
-        if (look.kind != PAREN_C) lista_parametros_segura();
+        if (look.kind != PAREN_C) lista_parametros_segura(simFunc);
 
         look = getToken(1);
         if (look.kind == PAREN_C) {
             jj_consume_token(PAREN_C);
         } else {
-            registrarError(look,
-                "Falta \")\" para cerrar los parametros de la funcion. Se encontro: \""
+            registrarErrorSintactico(look,
+                "Falta \")\" para cerrar los parámetros de la función. Se encontró: \""
                 + look.image + "\".");
             saltarHasta(ENTREGA, ABRE_B, EOF);
         }
 
         jj_consume_token(ENTREGA);
-        tipo();
+        String tipoRet = tipo();
+        if (simFunc != null) {
+            simFunc.tipoRetorno = tipoRet;
+            simFunc.tipo = tipoRet;
+        }
 
     } catch (ParseException e) {
-        registrarError(tokenParaError(e),
-            "Error al definir la funcion. Ejemplo: funcion suma($a como entero) entrega entero > ... <");
+        registrarErrorSintactico(tokenParaError(e),
+            "Error al definir la función. Ejemplo: funcion suma($a como entero) entrega entero > ... <");
         saltarHasta(ABRE_B, EOF);
     }
+
     bloque();
+
+    tablaSimbolos.salirBloque();
 }
 
 JAVACODE
-void lista_parametros_segura() {
+void lista_parametros_segura(Simbolo simFunc) {
     try {
-        parametro_seguro();
+        parametro_seguro(simFunc);
         while (true) {
             Token look = getToken(1);
             if (look.kind != COMA) break;
             jj_consume_token(COMA);
-            parametro_seguro();
+            parametro_seguro(simFunc);
         }
     } catch (ParseException e) {
-        registrarError(tokenParaError(e),
-            "Error en los parametros de la funcion. Ejemplo: funcion f($a como entero, $b como texto) entrega vacio");
+        registrarErrorSintactico(tokenParaError(e),
+            "Error en los parámetros de la función. Ejemplo: funcion f($a como entero, $b como texto) entrega vacio");
     }
 }
 
 JAVACODE
-void parametro_seguro() {
+void parametro_seguro(Simbolo simFunc) {
     Token look = getToken(1);
 
     if (look.kind != VARIABLE) {
-        registrarError(look,
-            "Parametro no reconocido: \"" + look.image +
-            "\". Los parametros deben ser variables. Ejemplo: $edad como entero.");
+        registrarErrorSintactico(look,
+            "Parámetro no reconocido: \"" + look.image +
+            "\". Los parámetros deben ser variables. Ejemplo: $edad como entero.");
         saltarHasta(COMA, PAREN_C, ENTREGA, ABRE_B, EOF);
         return;
     }
 
     try {
-        variable();
+        String nombreParam = variable();
         jj_consume_token(COMO);
-        tipo();
+        String tipoParam = tipo();
+
+        String tipoBase = tipoParam;
+        int dimensiones = 0;
+        while (tipoBase.startsWith("arreglo:")) {
+            dimensiones++;
+            tipoBase = tipoBase.substring(8);
+        }
+
+        if (tipoBase.equals("vacio")) {
+            registrarErrorSemantico(getToken(0), "Un parámetro no puede ser de tipo \"vacio\".");
+        } else {
+            Simbolo existente = tablaSimbolos.buscarLocal(nombreParam);
+            if (existente != null) {
+                // Mensaje directo y específico para parámetros duplicados
+                registrarErrorSemantico(getToken(0), "El parámetro \"" + nombreParam + "\" está duplicado.");
+            } else {
+                Simbolo simParam = tablaSimbolos.insertar(nombreParam, tipoBase, "parametro", getToken(0).beginLine, dimensiones);
+                if (simFunc != null) {
+                    simFunc.tiposParametros.add(tipoParam);
+                }
+            }
+        }
     } catch (ParseException e) {
-        registrarError(tokenParaError(e),
-            "Error al declarar el parametro. Ejemplo: $nombre como texto");
+        registrarErrorSintactico(tokenParaError(e),
+            "Error al declarar el parámetro. Ejemplo: $nombre como texto");
     }
 }
 
