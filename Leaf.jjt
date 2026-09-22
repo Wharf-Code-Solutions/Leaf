@@ -1,0 +1,945 @@
+options {
+    IGNORE_CASE = false;
+    STATIC      = false;
+    UNICODE_INPUT = true;
+    MULTI = true;
+    VISITOR = true;
+    NODE_DEFAULT_VOID = true;
+    OUTPUT_DIRECTORY = "generado";
+    TRACK_TOKENS = true;
+}
+
+PARSER_BEGIN(Leaf)
+package generado;
+
+import java.io.File;
+import java.io.FileInputStream;
+import java.util.ArrayList;
+import java.util.Stack;
+import java.util.Scanner;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+public class Leaf {
+
+    static ArrayList<String> errores = new ArrayList<String>();
+    static int totalErrores = 0;
+    static Stack<Token> pilaAberturas = new Stack<Token>();
+
+    public static void main(String[] args) {
+            File archivo = null;
+
+            if (args.length > 0) {
+                String ruta = args[0].trim();
+                archivo = new File(ruta);
+                if (!archivo.exists() || archivo.isDirectory() || !archivo.canRead()) {
+                    System.out.println("Error fatal: El archivo especificado no es valido, es una carpeta o no existe: \"" + ruta + "\"");
+                    System.out.println("Uso correcto: java generado.Leaf <ruta_del_archivo>");
+                    return;
+                }
+            } else {
+                Scanner teclado = new Scanner(System.in);
+                while (true) {
+                    System.out.println("Escriba la ruta del archivo a compilar:");
+                    String ruta = teclado.nextLine().trim();
+                    archivo = new File(ruta);
+
+                    if (!archivo.exists()) {
+                        System.out.println("No se encontró el archivo \"" + ruta + "\". Intenta de nuevo.\n");
+                        continue;
+                    }
+                    if (archivo.isDirectory()) {
+                        System.out.println("\"" + ruta + "\" es una carpeta, no un archivo. Intenta de nuevo.\n");
+                        continue;
+                    }
+                    if (!archivo.canRead()) {
+                        System.out.println("No se puede leer el archivo \"" + ruta + "\". Revisa los permisos e intenta de nuevo.\n");
+                        continue;
+                    }
+                    break;
+                }
+            }
+
+            SimpleNode raiz = null;
+
+            try {
+                FileInputStream fis = new FileInputStream(archivo);
+                Leaf parser = new Leaf(fis, "UTF-8");
+                raiz = parser.programa();
+
+            } catch (java.io.FileNotFoundException e) {
+                System.out.println("No se encontró el archivo \"" + archivo + "\".");
+                return;
+            } catch (ParseException e) {
+                registrarErrorSintactico(tokenParaError(e), mensajeReporteError(e));
+            } catch (TokenMgrError e) {
+                totalErrores++;
+                errores.add("Tipo de Error: Léxico : Colapso fatal del motor al leer caracteres.");
+            }
+
+            if (raiz != null) {
+                LeafVisitor visitante = new VisitanteSemantico();
+                raiz.jjtAccept(visitante, null);
+            }
+
+            System.out.println("\n============================================");
+
+            if (!errores.isEmpty()) {
+                System.out.println("  Se encontraron " + errores.size() + " error(es) en total:\n");
+
+                Collections.sort(errores, new Comparator<String>() {
+                    @Override
+                    public int compare(String e1, String e2) {
+                        return Integer.compare(extraerLinea(e1), extraerLinea(e2));
+                    }
+                });
+
+                for (String err : errores) System.out.println("  " + err);
+            } else {
+                System.out.println("  Programa válido. Sin errores sintácticos ni semánticos.");
+                System.out.println("  Árbol AST validado exitosamente en memoria.");
+            }
+
+            System.out.println("============================================");
+    }
+
+    static int extraerLinea(String error) {
+        Pattern p = Pattern.compile("Línea (\\d+)");
+        Matcher m = p.matcher(error);
+        if (m.find()) {
+            return Integer.parseInt(m.group(1));
+        }
+        return Integer.MAX_VALUE;
+    }
+
+    static void registrarErrorSintactico(Token t, String mensaje) {
+        totalErrores++;
+        String pos = (t != null) ? "Línea " + t.beginLine + ", Columna " + t.beginColumn : "Línea ?";
+        errores.add("Tipo de Error: Sintáctico " + pos + " : " + mensaje);
+    }
+
+    static Token tokenParaError(ParseException e) {
+        if (e.currentToken == null) return null;
+        if (e.expectedTokenSequences != null) {
+            for (int[] seq : e.expectedTokenSequences) {
+                for (int k : seq) {
+                    if (k == LeafConstants.PUNTO) return e.currentToken;
+                }
+            }
+        }
+        return e.currentToken.next;
+    }
+
+    static String mensajeReporteError(ParseException e) {
+        Token t = (e.currentToken != null && e.currentToken.next != null) ? e.currentToken.next : e.currentToken;
+        if (t == null) return e.getMessage();
+        String img = t.image;
+
+        if (t.kind == LeafConstants.DOLAR_SUELTO) return "Se encontró un '$' suelto o mal formado. Las variables deben llevar letras pegadas al símbolo.";
+        if (t.kind == LeafConstants.EOF) return "Fin de archivo inesperado. Revisa si olvidaste colocar un \"<\" para cerrar un bloque, un paréntesis \")\" o una instrucción con \".\".";
+
+        if (e.expectedTokenSequences != null) {
+            boolean punto = false, vale = false, como = false, cierraB = false, abreB = false,
+                    parenC = false, parenA = false, corchA = false, corchC = false, variable = false,
+                    coma = false, entrega = false, de = false, hasta = false, veces = false,
+                    flecha = false, indice = false, en = false, id = false, numero = false,
+                    cadena = false, tipoDato = false, opRelacional = false, faltaMientras = false;
+
+            for (int[] seq : e.expectedTokenSequences) {
+                for (int k : seq) {
+                    switch (k) {
+                        case LeafConstants.PUNTO: punto = true; break;
+                        case LeafConstants.VALE: vale = true; break;
+                        case LeafConstants.COMO: como = true; break;
+                        case LeafConstants.CIERRA_B: cierraB = true; break;
+                        case LeafConstants.ABRE_B: abreB = true; break;
+                        case LeafConstants.PAREN_C: parenC = true; break;
+                        case LeafConstants.PAREN_A: parenA = true; break;
+                        case LeafConstants.CORCH_A: corchA = true; break;
+                        case LeafConstants.CORCH_C: corchC = true; break;
+                        case LeafConstants.VARIABLE: variable = true; break;
+                        case LeafConstants.COMA: coma = true; break;
+                        case LeafConstants.ENTREGA: entrega = true; break;
+                        case LeafConstants.DE: de = true; break;
+                        case LeafConstants.HASTA: hasta = true; break;
+                        case LeafConstants.VECES: veces = true; break;
+                        case LeafConstants.FLECHA: flecha = true; break;
+                        case LeafConstants.INDICE: indice = true; break;
+                        case LeafConstants.EN: en = true; break;
+                        case LeafConstants.ID: id = true; break;
+                        case LeafConstants.NUMERO: numero = true; break;
+                        case LeafConstants.CADENA: cadena = true; break;
+                        case LeafConstants.ENTERO_T: case LeafConstants.DECIMAL_T: case LeafConstants.TEXTO_T:
+                        case LeafConstants.LOGICO_T: case LeafConstants.VACIO_T: case LeafConstants.ARREGLO_T: tipoDato = true; break;
+                        case LeafConstants.IGUAL: case LeafConstants.DIF: case LeafConstants.MAYOR_Q:
+                        case LeafConstants.MENOR_Q: case LeafConstants.MAYOR_IQ: case LeafConstants.MENOR_IQ: opRelacional = true; break;
+                        case LeafConstants.MIENTRAS: faltaMientras = true; break;
+                    }
+                }
+            }
+
+            if (punto) return "Falta \".\" al final de la instrucción antes de \"" + img + "\".";
+            if (vale) return "Se esperaba \"con valor de\" para asignar el valor. Se encontró: \"" + img + "\".";
+            if (como) return "Se esperaba \"como\" para indicar el tipo. Se encontró: \"" + img + "\".";
+            if (entrega) return "Falta la palabra \"entrega\" para indicar el tipo que devuelve la función.";
+            if (tipoDato) return "Lo que se encontró no es un tipo de dato válido (\"" + img + "\").";
+            if (numero || cadena) {
+                if (t.kind == LeafConstants.VARIABLE || img.startsWith("$")) return "Se esperaba un valor fijo. Las constantes no pueden inicializarse usando variables.";
+            }
+            if (de) return "Falta \"de\" en el ciclo \"para\".";
+            if (hasta) return "Falta \"hasta\" en el ciclo \"para\".";
+            if (veces) return "Falta la palabra \"veces\" en el ciclo \"repetir\".";
+            if (flecha) return "Falta \"->\" después del valor del \"caso\".";
+            if (indice) return "Falta la palabra \"índice\" después de \"quitar\".";
+            if (en) return "Falta la palabra \"en\" en la instrucción \"agregar\".";
+            if (cierraB) return "Falta \"<\" para cerrar el bloque. Se encontró: \"" + img + "\"";
+            if (abreB) return "Falta \">\" para abrir el bloque después de la condición o cabecera. Se encontró: \"" + img + "\"";
+            if (parenC) {
+                if (img.equals(">") || img.equals("<")) return "Parece que usaste \"" + img + "\" dentro de los paréntesis. Recuerda usar \"mayor que\" o \"menor que\".";
+                if (img.equals("(")) return "Se encontró un \"(\" inesperado. Si intentabas acceder a un arreglo usa corchetes \"[\".";
+                return "Falta \")\" para cerrar el paréntesis. Se encontró: \"" + img + "\".";
+            }
+            if (parenA) return "Falta \"(\" para abrir el paréntesis. Se encontró: \"" + img + "\".";
+            if (corchC) return "Falta \"]\" para cerrar el índice o el arreglo.";
+            if (corchA) {
+                if (img.equals("(")) return "Se esperaban corchetes \"[\" para acceder al índice del arreglo, pero se encontró \"(\".";
+                return "Falta \"[\" para indicar un índice o definir un arreglo.";
+            }
+            if (variable) return "Se esperaba una variable. Recuerda que deben empezar con \"$\". Se encontró: \"" + img + "\".";
+            if (coma) return "Falta \",\" para separar los elementos de la lista.";
+            if (opRelacional) {
+                if (img.equals(">") || img.equals("<")) return "En Leaf, los símbolos \">\" y \"<\" se usan exclusivamente para bloques. Usa \"mayor que\" o \"menor que\".";
+                return "Se esperaba un operador de comparación. Se encontró: \"" + img + "\".";
+            }
+            if (cadena) return "Se esperaba un texto entre comillas. Se encontró: \"" + img + "\".";
+            if (numero) return "Se esperaba un número. Se encontró: \"" + img + "\".";
+            if (id) {
+                if (t.kind == LeafConstants.VARIABLE || img.startsWith("$")) return "Los nombres de función no deben llevar \"$\".";
+                return "Se esperaba un nombre válido (de función). Se encontró: \"" + img + "\".";
+            }
+            if (faltaMientras) return "Falta la palabra \"mientras\" después del bloque \"hacer\".";
+        }
+        return "\"" + img + "\" no es válido aquí. Revisa la sintaxis de la instrucción.";
+    }
+}
+PARSER_END(Leaf)
+
+/* ============================================================
+ *  LEXICO
+ * ============================================================ */
+
+SKIP : { <NUEVA_LINEA: "\n" | "\r\n" | "\r"> }
+SKIP : { " " | "\t" }
+SKIP : { <COMENTARIO_LINEA: "//" (~["\n","\r"])*> }
+
+MORE : { "/*" : IN_BLOCK_COMMENT }
+<IN_BLOCK_COMMENT> MORE  : { < ~[] > }
+<IN_BLOCK_COMMENT> SKIP  : { < "*/" > : DEFAULT }
+
+TOKEN : {
+      <DEFINIR:    "definir">
+    | <COMO:       "como">
+    | <VALE:       "con valor de">
+    | <CONSTANTE:  "constante">
+    | <ENTERO_T:   "entero">
+    | <DECIMAL_T:  "decimal">
+    | <TEXTO_T:    "texto">
+    | <LOGICO_T:   "logico">
+    | <ARREGLO_T:  "arreglo">
+    | <VACIO_T:    "vacio">
+    | <SI_LIT:     "verdadero">
+    | <NO_LIT:     "falso">
+    | <MOSTRAR:    "mostrar">
+    | <LEER:       "ingresar">
+    | <FUNCION:    "funcion">
+    | <ENTREGA:    "entrega">
+    | <RETORNAR:   "retornar">
+    | <SI:         "si">
+    | <SINO_SI:    "sino si">
+    | <SINO:       "sino">
+    | <SEGUN:      "segun">
+    | <CASO:       "caso">
+    | <ROMPER:     "romper">
+    | <CONTINUAR:  "continuar">
+    | <DEFECTO:    "defecto">
+    | <MIENTRAS:   "mientras">
+    | <REPETIR:    "repetir">
+    | <VECES:      "veces">
+    | <PARA:       "para">
+    | <HASTA:      "hasta">
+    | <PASO:       "paso">
+    | <Y:          "Y">
+    | <O:          "O">
+    | <NO:         "NO">
+    | <IGUAL:      "igual que">
+    | <DIF:        "diferente que">
+    | <MAYOR_Q:    "mayor que">
+    | <MENOR_Q:    "menor que">
+    | <MAYOR_IQ:   "mayor o igual que">
+    | <MENOR_IQ:   "menor o igual que">
+    | <EN:         "en">
+    | <AGREGAR:    "agregar">
+    | <QUITAR:     "quitar">
+    | <DE:         "de">
+    | <INDICE:     "indice">
+    | <TAMANO:     "longitud">
+    | <HACER:      "hacer">
+}
+
+TOKEN : {
+      <PUNTO:    ".">
+    | <PAREN_A:  "(">
+    | <PAREN_C:  ")">
+    | <ABRE_B:   ">">
+    | <CIERRA_B: "<">
+    | <CORCH_A:  "[">
+    | <CORCH_C:  "]">
+    | <COMA:     ",">
+    | <FLECHA:   "->">
+    | <MAS:      "+">
+    | <MENOS:    "-">
+    | <POR:      "*">
+    | <DIV:      "/">
+    | <POT:      "^">
+    | <RAIZ:     "-/">
+    | <MOD:      "%">
+}
+
+TOKEN : {
+      <DEC:    (["0"-"9"])+ "." (["0"-"9"])+>
+    | <NUMERO: (["0"-"9"])+>
+    | <VARIABLE: "$" ["a"-"z","A"-"Z","_","á","é","í","ó","ú","Á","É","Í","Ó","Ú","ñ","Ñ"] ( ["a"-"z","A"-"Z","0"-"9","_","á","é","í","ó","ú","Á","É","Í","Ó","Ú","ñ","Ñ"] )* >
+    | <ID: ["a"-"z","A"-"Z","_","á","é","í","ó","ú","Á","É","Í","Ó","Ú","ñ","Ñ"] ( ["a"-"z","A"-"Z","0"-"9","_","á","é","í","ó","ú","Á","É","Í","Ó","Ú","ñ","Ñ"] )* >
+    | <DOLAR_SUELTO: "$">
+}
+
+MORE : { <CADENA_INICIO: "\""> : IN_CADENA }
+<IN_CADENA> MORE : {
+      <CADENA_ESCAPE_VALIDA: "\\" ["n","t","r","\"","\\","0"]>
+    | <CADENA_ESCAPE_INVALIDA: "\\" ~[]>
+      {
+          Leaf.totalErrores++;
+          String esc = image.substring(image.length() - 2);
+          Leaf.errores.add("Tipo de Error: Léxico Línea " + input_stream.getEndLine()
+              + ", Columna " + (input_stream.getEndColumn() - 1) + " : Secuencia de escape no válida: \"" + esc + "\".");
+      }
+    | <CADENA_CHAR: ~["\"","\\"]>
+}
+
+<IN_CADENA> TOKEN : {
+      <CADENA: "\""> : DEFAULT
+}
+
+SKIP : {
+    < ERROR_LEXICO: ~[] >
+    {
+        Leaf.totalErrores++;
+        String msgError = "Carácter no reconocido: '" + image + "'.";
+        if (image.equals(";")) msgError = "En Leaf las instrucciones terminan con punto (\".\"), no con punto y coma (\";\").";
+        else if (image.equals("=")) msgError = "El símbolo \"=\" no es válido en Leaf. Usa \"con valor de\" para asignar.";
+        else if (image.equals("{") || image.equals("}")) msgError = "En Leaf los bloques de código se abren con \">\" y se cierran con \"<\".";
+
+        Leaf.errores.add("Tipo de Error: Léxico Línea " + input_stream.getBeginLine() + ", Columna " + input_stream.getBeginColumn() + " : " + msgError);
+    }
+}
+
+/* ============================================================
+ *  HELPERS JAVACODE
+ * ============================================================ */
+
+JAVACODE
+void saltarHasta(int... targets) {
+    while (true) {
+        Token t = getToken(1);
+        if (t.kind == EOF) return;
+        for (int target : targets) {
+            if (t.kind == target) return;
+        }
+        if (t.kind == CIERRA_B && !pilaAberturas.isEmpty()) pilaAberturas.pop();
+        getNextToken();
+    }
+}
+
+JAVACODE
+String mensajeInicioInvalido(Token look) {
+    switch (look.kind) {
+        case FUNCION: return "No se permite declarar funciones dentro de otra función, ciclo o condicional.";
+        case DOLAR_SUELTO: return "Se encontró un '$' suelto. Las variables deben llevar letras pegadas al símbolo.";
+        case NUMERO: case DEC: return "Una instrucción no puede comenzar con un número (\"" + look.image + "\").";
+        case CADENA: return "Una instrucción no puede comenzar con un texto suelto.";
+        case SI_LIT: case NO_LIT: return "Una instrucción no puede comenzar con un valor lógico suelto.";
+        case CASO: return "\"caso\" solo puede usarse dentro de un bloque \"según\".";
+        case DEFECTO: return "\"defecto\" solo puede usarse dentro de un bloque \"según\".";
+        case SINO: case SINO_SI: return "\"" + look.image + "\" no puede aparecer sin un \"si\" antes.";
+        case MAS: case POR: case DIV: case POT: case MOD: case MENOS: case RAIZ: return "Una instrucción no puede comenzar con el operador \"" + look.image + "\".";
+        case IGUAL: case DIF: case MAYOR_Q: case MENOR_Q: case MAYOR_IQ: case MENOR_IQ: return "Una instrucción no puede comenzar con un operador de comparación.";
+        case Y: case O: return "Una instrucción no puede comenzar con el operador lógico \"" + look.image + "\".";
+        case NO: return "\"NO\" solo se usa dentro de una condición; no puede empezar una instrucción por sí solo.";
+        case VALE: return "\"con valor de\" no puede aparecer aquí.";
+        case COMO: return "\"como\" no puede aparecer aquí.";
+        case ENTREGA: return "\"entrega\" solo se usa en la cabecera de una función.";
+        case FLECHA: return "\"->\" solo se usa después del valor de un \"caso\" dentro de un \"según\".";
+        case DE: case HASTA: case PASO: return "\"" + look.image + "\" solo se usa en la cabecera del ciclo \"para\".";
+        case VECES: return "\"veces\" solo se usa después de un número en el ciclo \"repetir\".";
+        case EN: return "\"en\" solo se usa en la instrucción \"agregar\".";
+        case INDICE: return "\"índice\" solo se usa después de \"quitar\".";
+        case ENTERO_T: case DECIMAL_T: case TEXTO_T: case LOGICO_T: case VACIO_T: case ARREGLO_T: return "Una instrucción no puede comenzar con un tipo de dato.";
+        case PUNTO: return "Se encontró un \".\" sin ninguna instrucción antes.";
+        case COMA: return "Se encontró una \",\" fuera de lugar.";
+        case PAREN_A: return "Una instrucción no puede empezar con \"(\" suelto.";
+        case PAREN_C: return "Se encontró un \")\" sin su \"(\" correspondiente.";
+        case CORCH_A: return "Un corchete \"[\" no puede empezar una instrucción.";
+        case CIERRA_B: if (pilaAberturas.isEmpty()) return "Se encontró un \"<\" de más; revisa que no haya un bloque cerrado dos veces."; return null;
+        default: return null;
+    }
+}
+
+/* ============================================================
+ *  SINTÁCTICO CON JJTREE (NODOS AST)
+ * ============================================================ */
+
+SimpleNode programa() #Programa : {}
+{
+    try {
+        (
+            LOOKAHEAD( { getToken(1).kind == FUNCION } ) def_funcion_segura()
+          | LOOKAHEAD( { getToken(1).kind != EOF } ) sentencia_segura()
+        )*
+        <EOF>
+    } catch (TokenMgrError e) {
+        {
+            Leaf.totalErrores++;
+            Leaf.errores.add("Tipo de Error: Léxico : Parece que falta una comilla \" de cierre en un texto o hay un símbolo inválido al final del archivo.");
+        }
+    }
+    {
+        while (!pilaAberturas.isEmpty()) {
+            Token t = pilaAberturas.pop();
+            totalErrores++;
+            errores.add("Tipo de Error: Sintáctico Línea " + t.beginLine + ", Columna " + t.beginColumn + " : Bloque abierto con \">\" en la línea " + t.beginLine + " nunca fue cerrado con \"<\".");
+        }
+        return jjtThis;
+    }
+}
+
+void def_funcion_segura() : {}
+{
+    try {
+        def_funcion()
+    } catch (ParseException e) {
+        {
+            registrarErrorSintactico(tokenParaError(e), mensajeReporteError(e));
+            saltarHasta(CIERRA_B, EOF);
+            if (getToken(1).kind == CIERRA_B) getNextToken();
+        }
+    }
+}
+
+void sentencia_segura() : { Token look; String msgEspecial; }
+{
+    {
+        jj_ntk = -1;
+        look = getToken(1);
+        msgEspecial = mensajeInicioInvalido(look);
+        if (msgEspecial != null) {
+            registrarErrorSintactico(look, msgEspecial);
+            getNextToken();
+            if (look.kind == CIERRA_B && !pilaAberturas.isEmpty()) pilaAberturas.pop();
+            saltarHasta(PUNTO, CIERRA_B, ABRE_B, EOF);
+            if (getToken(1).kind == PUNTO) getNextToken();
+            return;
+        }
+    }
+
+    (
+        try {
+            sentencia()
+        } catch (ParseException e) {
+            {
+                registrarErrorSintactico(tokenParaError(e), mensajeReporteError(e));
+                saltarHasta(PUNTO, CIERRA_B, ABRE_B, EOF);
+                if (getToken(1).kind == PUNTO) getNextToken();
+            }
+        }
+    )
+}
+
+void sentencia() : {}
+{
+      LOOKAHEAD(<CONSTANTE>) declaracion_constante() <PUNTO>
+    | LOOKAHEAD(<DEFINIR>) declaracion() <PUNTO>
+    | LOOKAHEAD(<SI>) condicional()
+    | LOOKAHEAD(<MIENTRAS>) despachador_mientras()
+    | LOOKAHEAD(<HACER>) ciclo_hacer_mientras()
+    | LOOKAHEAD(<REPETIR>) ciclo_repetir()
+    | LOOKAHEAD(<PARA>) ciclo_para()
+    | LOOKAHEAD(<SEGUN>) segun()
+    | LOOKAHEAD(<MOSTRAR>) mostrar() <PUNTO>
+    | LOOKAHEAD(<LEER> <PAREN_A>) llamada_leer() <PUNTO>
+    | LOOKAHEAD(<RETORNAR>) retornar() <PUNTO>
+    | LOOKAHEAD(<ROMPER>) romper() <PUNTO>
+    | LOOKAHEAD(<CONTINUAR>) continuar() <PUNTO>
+    | LOOKAHEAD(<AGREGAR>) operacion_arreglo_agregar() <PUNTO>
+    | LOOKAHEAD(<QUITAR>) operacion_arreglo_quitar() <PUNTO>
+    | LOOKAHEAD(<VARIABLE>) asignacion() <PUNTO>
+    | LOOKAHEAD( <ID> <PAREN_A> ) llamada_funcion() <PUNTO>
+    | LOOKAHEAD(<ABRE_B>) bloque_huerfano()
+}
+
+JAVACODE
+void despachador_mientras() {
+    boolean esHacer = false;
+    int i = 1;
+    while (true) {
+        Token t = getToken(i);
+        if (t.kind == EOF || t.kind == ABRE_B || t.kind == CIERRA_B) break;
+        if (t.kind == PUNTO) {
+            esHacer = true;
+            break;
+        }
+        i++;
+    }
+    if (esHacer) cola_huerfana_hacer();
+    else ciclo_mientras();
+}
+
+JAVACODE
+void bloque_huerfano() {
+    registrarErrorSintactico(getToken(1), "Se encontró un bloque \"> ... <\" huérfano.");
+    try { bloque(); } catch(Exception e) {}
+}
+
+void cola_huerfana_hacer() : {}
+{
+    try {
+        <MIENTRAS> <PAREN_A> condicion() <PAREN_C> <PUNTO>
+        { registrarErrorSintactico(getToken(0), "Se encontró un \"mientras\" con punto final pero faltó la palabra \"hacer\" al inicio."); }
+    } catch (ParseException e) {
+        {
+            registrarErrorSintactico(tokenParaError(e), "Error en la structure huérfana: " + mensajeReporteError(e));
+            saltarHasta(PUNTO, EOF);
+            if (getToken(1).kind == PUNTO) getNextToken();
+        }
+    }
+}
+
+void bloque() #Bloque : { Token abreToken; }
+{
+    try {
+        { abreToken = getToken(1); }
+        <ABRE_B>
+        { pilaAberturas.push(abreToken); }
+    } catch (ParseException e) {
+        {
+            Token t = getToken(1);
+            if (t.kind == ID && (t.image.equalsIgnoreCase("aumentando") || t.image.equalsIgnoreCase("incrementando"))) {
+                registrarErrorSintactico(t, "Se esperaba la palabra \"paso\" para definir el incremento del ciclo \"para\".");
+            } else {
+                registrarErrorSintactico(tokenParaError(e), "Falta \">\" para abrir el bloque.");
+            }
+            saltarHasta(ABRE_B, CIERRA_B, EOF);
+            if (getToken(1).kind == ABRE_B) {
+                abreToken = getToken(1);
+                getNextToken();
+                pilaAberturas.push(abreToken);
+            } else return;
+        }
+    }
+
+    (
+        LOOKAHEAD( { getToken(1).kind != CIERRA_B && getToken(1).kind != EOF } )
+        sentencia_segura()
+    )*
+
+    {
+        if (getToken(1).kind == CIERRA_B) {
+            getNextToken();
+            if (!pilaAberturas.isEmpty()) pilaAberturas.pop();
+        } else if (getToken(1).kind != EOF) {
+            registrarErrorSintactico(getToken(1), "Falta \"<\" para cerrar el bloque.");
+        }
+    }
+}
+
+void bloque_caso() : {}
+{
+    (
+        LOOKAHEAD( { getToken(1).kind != CASO && getToken(1).kind != DEFECTO && getToken(1).kind != CIERRA_B && getToken(1).kind != EOF } )
+        sentencia_segura()
+    )*
+}
+
+void declaracion() #Declaracion : {}
+{
+    <DEFINIR> variable() <COMO> tipo() <VALE> expresion()
+}
+
+void declaracion_constante() #DeclConstante : {}
+{
+    <CONSTANTE> variable() <COMO> tipo() <VALE> literal()
+}
+
+void asignacion() #Asignacion : {}
+{
+    identificador_asignable() <VALE> expresion()
+}
+
+void identificador_asignable() : {}
+{
+      LOOKAHEAD( variable() <CORCH_A> ) acceso_arreglo()
+    | variable()
+}
+
+void variable() #Variable : { Token t; }
+{
+    t=<VARIABLE> { jjtThis.jjtSetValue(t.image); }
+}
+
+void nombre_funcion() #Id : { Token t; }
+{
+    t=<ID> { jjtThis.jjtSetValue(t.image); }
+}
+
+void llamada_leer() #Leer : {}
+{
+    <LEER> <PAREN_A> ( literal_texto() )? <PAREN_C>
+}
+
+void literal_texto() #Literal : { Token t; }
+{
+    t=<CADENA> { jjtThis.jjtSetValue(t.image); }
+}
+
+void expresion() #Expresion : {}
+{
+    condicion()
+}
+
+void condicion() : {}
+{
+    comparacion() ( op_logico() comparacion() )*
+}
+
+void comparacion() : {}
+{
+      <NO> comparacion() #Not(1)
+    | LOOKAHEAD(expresion_aritmetica() op_relacional()) expresion_aritmetica() op_relacional() expresion_aritmetica() #Comparacion(3)
+    | expresion_aritmetica()
+}
+
+void expresion_aritmetica() : {}
+{
+    termino() ( op_aritmetico() termino() #Aritmetica(3) )*
+}
+
+void termino() : {}
+{
+      <MENOS> termino() #Negacion(1)
+    | <RAIZ> termino() #Raiz(1)
+    | <PAREN_A> expresion() <PAREN_C>
+    | LOOKAHEAD(<LEER> <PAREN_A>) llamada_leer()
+    | LOOKAHEAD(<TAMANO> <PAREN_A>) <TAMANO> <PAREN_A> variable() <PAREN_C> #Longitud(1)
+    | LOOKAHEAD( variable() <CORCH_A> ) acceso_arreglo()
+    | LOOKAHEAD( <ID> <PAREN_A> ) llamada_funcion()
+    | literal()
+    | variable()
+}
+
+void literal() #Literal : { Token t; }
+{
+    ( t=<DEC> | t=<NUMERO> | t=<CADENA> | t=<SI_LIT> | t=<NO_LIT> )
+    { jjtThis.jjtSetValue(t.image); }
+  | literal_arreglo()
+}
+
+void tipo() #Tipo : { Token t; }
+{
+    ( t=<ENTERO_T> | t=<DECIMAL_T> | t=<TEXTO_T> | t=<LOGICO_T> | t=<VACIO_T> )
+    { jjtThis.jjtSetValue(t.image); }
+  | tipo_arreglo()
+}
+
+void tipo_arreglo() #TipoArreglo : {}
+{
+    <ARREGLO_T> <CORCH_A> tipo() <CORCH_C>
+}
+
+void op_aritmetico() #Operador : { Token t; }
+{
+    ( t=<MAS> | t=<MENOS> | t=<POR> | t=<DIV> | t=<POT> | t=<RAIZ> | t=<MOD> )
+    { jjtThis.jjtSetValue(t.image); }
+}
+
+void op_relacional() #Operador : { Token t; }
+{
+    ( t=<IGUAL> | t=<DIF> | t=<MAYOR_Q> | t=<MENOR_Q> | t=<MAYOR_IQ> | t=<MENOR_IQ> )
+    { jjtThis.jjtSetValue(t.image); }
+}
+
+void op_logico() #Operador : { Token t; }
+{
+    ( t=<Y> | t=<O> )
+    { jjtThis.jjtSetValue(t.image); }
+}
+
+void condicional() #Condicional : {}
+{
+    try {
+        <SI> <PAREN_A> condicion() <PAREN_C>
+    } catch (ParseException e) {
+        {
+            registrarErrorSintactico(tokenParaError(e), "Error en la condición del \"si\".");
+            saltarHasta(ABRE_B, EOF);
+        }
+    }
+    bloque()
+
+    (
+        try {
+            <SINO_SI> <PAREN_A> condicion() <PAREN_C>
+        } catch (ParseException e) {
+            {
+                registrarErrorSintactico(tokenParaError(e), "Error en la condición del \"sino si\".");
+                saltarHasta(ABRE_B, EOF);
+            }
+        }
+        bloque()
+    )*
+
+    ( <SINO> bloque() )?
+}
+
+void segun() #Segun : { Token abreToken; }
+{
+    try {
+        <SEGUN> <PAREN_A> variable() <PAREN_C>
+        { abreToken = getToken(1); }
+        <ABRE_B>
+        { pilaAberturas.push(abreToken); }
+    } catch (ParseException e) {
+        {
+            registrarErrorSintactico(tokenParaError(e), "Error en la expresión del \"según\".");
+            saltarHasta(ABRE_B, EOF);
+            if (getToken(1).kind == ABRE_B) {
+                abreToken = getToken(1);
+                getNextToken();
+                pilaAberturas.push(abreToken);
+            } else return;
+        }
+    }
+
+    {
+        Token look = getToken(1);
+        if (look.kind != CASO && look.kind != DEFECTO && look.kind != CIERRA_B && look.kind != EOF)
+            registrarErrorSintactico(look, "El bloque \"según\" debe tener al menos un \"caso\".");
+    }
+
+    (
+        try {
+            caso()
+        } catch (ParseException e) {
+            {
+                registrarErrorSintactico(tokenParaError(e), "Error dentro de un \"caso\".");
+                saltarHasta(CASO, DEFECTO, CIERRA_B, EOF);
+            }
+        }
+    )*
+
+    (
+        try {
+            <DEFECTO> <FLECHA> bloque_caso()
+        } catch (ParseException e) {
+            {
+                registrarErrorSintactico(tokenParaError(e), "Error dentro del \"defecto\".");
+                saltarHasta(CIERRA_B, EOF);
+            }
+        }
+    )?
+
+    {
+        if (getToken(1).kind == CIERRA_B) {
+            getNextToken();
+            if (!pilaAberturas.isEmpty()) pilaAberturas.pop();
+        } else if (getToken(1).kind != EOF) {
+            registrarErrorSintactico(getToken(1), "Falta \"<\" para cerrar el bloque \"según\".");
+        }
+    }
+}
+
+void caso() #Caso : {}
+{
+    <CASO> literal() <FLECHA> bloque_caso()
+}
+
+void ciclo_mientras() #Mientras : {}
+{
+    try {
+        <MIENTRAS> <PAREN_A> condicion() <PAREN_C>
+    } catch (ParseException e) {
+        {
+            registrarErrorSintactico(tokenParaError(e), "Error en la condición del \"mientras\".");
+            saltarHasta(ABRE_B, EOF);
+        }
+    }
+    bloque()
+}
+
+void ciclo_hacer_mientras() #HacerMientras : {}
+{
+    try {
+        <HACER>
+    } catch (ParseException e) {
+        {
+            registrarErrorSintactico(tokenParaError(e), "Error al iniciar el ciclo \"hacer\".");
+            saltarHasta(ABRE_B, EOF);
+        }
+    }
+    bloque()
+    try {
+        <MIENTRAS> <PAREN_A> condicion() <PAREN_C> <PUNTO>
+    } catch (ParseException e) {
+        {
+            registrarErrorSintactico(tokenParaError(e), "Error en el cierre del ciclo \"hacer-mientras\".");
+            saltarHasta(PUNTO, EOF);
+            if (getToken(1).kind == PUNTO) getNextToken();
+        }
+    }
+}
+
+void ciclo_repetir() #Repetir : {}
+{
+    try {
+        <REPETIR> expresion() <VECES>
+    } catch (ParseException e) {
+        {
+            registrarErrorSintactico(tokenParaError(e), "Error en el \"repetir\".");
+            saltarHasta(ABRE_B, EOF);
+        }
+    }
+    bloque()
+}
+
+void ciclo_para() #Para : {}
+{
+    try {
+        <PARA> variable() <DE> expresion() <HASTA> expresion()
+        ( <PASO> expresion() )?
+    } catch (ParseException e) {
+        {
+            registrarErrorSintactico(tokenParaError(e), "Error en la cabecera del \"para\".");
+            saltarHasta(ABRE_B, EOF);
+        }
+    }
+    bloque()
+}
+
+void def_funcion() #DefFuncion : {}
+{
+    try {
+        <FUNCION> nombre_funcion() <PAREN_A>
+        ( LOOKAHEAD( { getToken(1).kind != PAREN_C } ) lista_parametros_segura() )?
+        {
+            Token look = getToken(1);
+            if (look.kind == PAREN_C) {
+                getNextToken();
+            } else {
+                registrarErrorSintactico(look, "Falta \")\" para cerrar los parámetros.");
+                saltarHasta(ENTREGA, ABRE_B, EOF);
+            }
+        }
+        <ENTREGA> tipo()
+    } catch (ParseException e) {
+        {
+            registrarErrorSintactico(tokenParaError(e), "Error al definir la función.");
+            saltarHasta(ABRE_B, EOF);
+        }
+    }
+    bloque()
+}
+
+void lista_parametros_segura() : {}
+{
+    try {
+        parametro_seguro() ( <COMA> parametro_seguro() )*
+    } catch (ParseException e) {
+        {
+            registrarErrorSintactico(tokenParaError(e), "Error en los parámetros de la función.");
+        }
+    }
+}
+
+void parametro_seguro() #Parametro : {}
+{
+    {
+        if (getToken(1).kind != VARIABLE) {
+            registrarErrorSintactico(getToken(1), "Parámetro no reconocido.");
+            saltarHasta(COMA, PAREN_C, ENTREGA, ABRE_B, EOF);
+            return;
+        }
+    }
+    try {
+        variable() <COMO> tipo()
+    } catch (ParseException e) {
+        {
+            registrarErrorSintactico(tokenParaError(e), "Error al declarar el parámetro.");
+        }
+    }
+}
+
+void romper() #Romper : {}
+{
+    <ROMPER>
+}
+
+void continuar() #Continuar : {}
+{
+    <CONTINUAR>
+}
+
+void llamada_funcion() #LlamadaFuncion : {}
+{
+    nombre_funcion() <PAREN_A> ( lista_argumentos() )? <PAREN_C>
+}
+
+void lista_argumentos() : {}
+{
+    expresion() ( <COMA> expresion() )*
+}
+
+void retornar() #Retornar : {}
+{
+      LOOKAHEAD(<RETORNAR> <PUNTO>) <RETORNAR>
+    | <RETORNAR> expresion()
+}
+
+void mostrar() #Mostrar : {}
+{
+    <MOSTRAR> <PAREN_A> expresion() ( <COMA> expresion() )* <PAREN_C>
+}
+
+void literal_arreglo() #LiteralArreglo : {}
+{
+    <CORCH_A> ( lista_valores() )? <CORCH_C>
+}
+
+void acceso_arreglo() #AccesoArreglo : {}
+{
+    variable() ( <CORCH_A> expresion() <CORCH_C> )+
+}
+
+void operacion_arreglo_agregar() #Agregar : {}
+{
+    <AGREGAR> expresion() <EN> variable() ( <CORCH_A> expresion() <CORCH_C> )*
+}
+
+void operacion_arreglo_quitar() #Quitar : {}
+{
+    <QUITAR> <INDICE> <CORCH_A> expresion() <CORCH_C> ( <CORCH_A> expresion() <CORCH_C> )* <DE> variable()
+}
+
+void lista_valores() : {}
+{
+    expresion() ( <COMA> expresion() )*
+}
