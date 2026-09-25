@@ -11,6 +11,13 @@ public class VisitanteSemantico extends LeafDefaultVisitor {
         // La tabla ya crea su ámbito "Global" automáticamente
     }
 
+    // MÉTODO: Valida la coerción implícita de entero a decimal
+    private boolean sonTiposCompatibles(String esperado, String recibido) {
+        if (esperado.equals(recibido)) return true;
+        if (esperado.equals("decimal") && recibido.equals("entero")) return true;
+        return false;
+    }
+
     private String extraerTipo(SimpleNode nodo) {
         String val = (String) nodo.jjtGetValue();
         return (val != null) ? val : "arreglo";
@@ -21,10 +28,9 @@ public class VisitanteSemantico extends LeafDefaultVisitor {
             SimpleNode interior = (SimpleNode) nodoTipo.jjtGetChild(0);
             return "arreglo:" + extraerTipoProfundo(interior);
         } else if (nodoTipo instanceof ASTTipo && nodoTipo.jjtGetNumChildren() > 0) {
-            // Descenso seguro si el ASTTipo contiene un ASTTipoArreglo
             return extraerTipoProfundo((SimpleNode) nodoTipo.jjtGetChild(0));
         }
-        return (String) nodoTipo.jjtGetValue(); // entero, decimal, texto, logico, vacio
+        return (String) nodoTipo.jjtGetValue();
     }
 
     private void reportar(SimpleNode nodo, String mensaje) {
@@ -68,7 +74,6 @@ public class VisitanteSemantico extends LeafDefaultVisitor {
         tabla.entrarBloque(nombreFun);
         retornoEsperado.push(tipoRetorno);
 
-        // Registrar parámetros y extraer tipos para la firma
         for (int i = 1; i < numHijos - 2; i++) {
             SimpleNode param = (SimpleNode) node.jjtGetChild(i);
             if (param instanceof ASTParametro) {
@@ -76,17 +81,16 @@ public class VisitanteSemantico extends LeafDefaultVisitor {
                 String tipoParam = (nodoTipoParam instanceof ASTTipoArreglo || (nodoTipoParam instanceof ASTTipo && nodoTipoParam.jjtGetNumChildren() > 0))
                         ? extraerTipoProfundo(nodoTipoParam) : extraerTipo(nodoTipoParam);
                 simFunc.tiposParametros.add(tipoParam);
-                param.jjtAccept(this, data); // Llama al visit(ASTParametro) que lo inserta en la tabla local
+                param.jjtAccept(this, data);
             }
         }
 
-        // Visitar el bloque
         node.jjtGetChild(numHijos - 1).jjtAccept(this, data);
 
         retornoEsperado.pop();
         tabla.salirBloque();
 
-        return null; // El recorrido de los hijos ya se gestionó
+        return null;
     }
 
     @Override
@@ -98,7 +102,8 @@ public class VisitanteSemantico extends LeafDefaultVisitor {
 
         String tipoRequerido = retornoEsperado.isEmpty() ? "vacio" : retornoEsperado.peek();
 
-        if (!tipoDevuelto.equals(tipoRequerido) && !tipoDevuelto.equals("error")) {
+        // INTEGRACIÓN: Coerción en retornos de funciones
+        if (!sonTiposCompatibles(tipoRequerido, tipoDevuelto) && !tipoDevuelto.equals("error")) {
             reportar(node, "La función promete entregar '" + tipoRequerido + "' pero está intentando retornar '" + tipoDevuelto + "'.");
         }
         return super.visit(node, data);
@@ -145,11 +150,12 @@ public class VisitanteSemantico extends LeafDefaultVisitor {
         }
 
         String tipoValor = (String) nodoExpresion.jjtAccept(this, data);
-        if (tipoValor != null && !tipoValor.equals("error") && !tipoValor.equals(tipoDeclarado) && !tipoValor.startsWith("arreglo")) {
+
+        // INTEGRACIÓN: Coerción en inicialización de variables/constantes
+        if (tipoValor != null && !tipoValor.equals("error") && !sonTiposCompatibles(tipoDeclarado, tipoValor) && !tipoValor.startsWith("arreglo")) {
             reportar(nodoExpresion, "Incompatibilidad de tipos: Intentas guardar un '" + tipoValor + "' en una variable definida como '" + tipoDeclarado + "'.");
         }
 
-        // Plegado de constantes básico
         if (categoria.equals("constante") && insertado != null) {
             if (nodoExpresion instanceof ASTLiteral) {
                 insertado.valorConstante = nodoExpresion.jjtGetValue();
@@ -189,13 +195,15 @@ public class VisitanteSemantico extends LeafDefaultVisitor {
                     for (int i = 0; i < numIndices && tipoEsperado.startsWith("arreglo:"); i++) {
                         tipoEsperado = tipoEsperado.substring(8);
                     }
-                    if (!tipoNuevoValor.equals(tipoEsperado) && !tipoNuevoValor.startsWith("arreglo")) {
+                    // INTEGRACIÓN: Coerción en asignación a arreglos
+                    if (!sonTiposCompatibles(tipoEsperado, tipoNuevoValor) && !tipoNuevoValor.startsWith("arreglo")) {
                         reportar(node, "Choque de tipos: No puedes asignar un '" + tipoNuevoValor
                                 + "' al elemento de '" + nombreVar + "' que es de tipo '" + tipoEsperado + "'.");
                     }
                 }
             } else {
-                if (!tipoNuevoValor.equals(simbolo.tipo) && !tipoNuevoValor.startsWith("arreglo")) {
+                // INTEGRACIÓN: Coerción en asignaciones normales
+                if (!sonTiposCompatibles(simbolo.tipo, tipoNuevoValor) && !tipoNuevoValor.startsWith("arreglo")) {
                     reportar(node, "Choque de tipos: No puedes asignar un '" + tipoNuevoValor + "' a la variable '" + nombreVar + "' que es de tipo '" + simbolo.tipo + "'.");
                 }
             }
@@ -303,6 +311,8 @@ public class VisitanteSemantico extends LeafDefaultVisitor {
         String tipoIzq = (String) node.jjtGetChild(0).jjtAccept(this, data);
         String tipoDer = (String) node.jjtGetChild(2).jjtAccept(this, data);
 
+        String operador = (String) ((SimpleNode) node.jjtGetChild(1)).jjtGetValue();
+
         if (tipoIzq == null || tipoDer == null) return "error";
         if (tipoIzq.equals("error") || tipoDer.equals("error")) return "error";
 
@@ -310,14 +320,34 @@ public class VisitanteSemantico extends LeafDefaultVisitor {
             reportar(node, "Operación matemática inválida entre '" + tipoIzq + "' y '" + tipoDer + "'. Solo se permiten números.");
             return "error";
         }
-        if (tipoIzq.equals("decimal") || tipoDer.equals("decimal")) return "decimal";
+
+        // INTEGRACIÓN: La división o la presencia de un decimal promueven el resultado a decimal
+        if (tipoIzq.equals("decimal") || tipoDer.equals("decimal") || "/".equals(operador)) {
+            return "decimal";
+        }
         return "entero";
     }
 
     @Override
     public Object visit(ASTComparacion node, Object data) {
-        node.jjtGetChild(0).jjtAccept(this, data);
-        node.jjtGetChild(2).jjtAccept(this, data);
+        String tipoIzq = (String) node.jjtGetChild(0).jjtAccept(this, data);
+        String tipoDer = (String) node.jjtGetChild(2).jjtAccept(this, data);
+
+        if (tipoIzq == null || tipoDer == null || tipoIzq.equals("error") || tipoDer.equals("error")) {
+            return "error";
+        }
+
+        // Validación de compatibilidad para comparaciones
+        boolean sonIguales = tipoIzq.equals(tipoDer);
+        boolean sonNumerosMezclados = (tipoIzq.equals("entero") || tipoIzq.equals("decimal")) &&
+                (tipoDer.equals("entero") || tipoDer.equals("decimal"));
+
+        // Si no son exactamente el mismo tipo, y tampoco son una mezcla válida de números (entero vs decimal), es un error
+        if (!sonIguales && !sonNumerosMezclados) {
+            reportar(node, "Operación relacional inválida: No puedes comparar un '" + tipoIzq + "' con un '" + tipoDer + "'.");
+            return "error";
+        }
+
         return "logico";
     }
 
@@ -341,7 +371,9 @@ public class VisitanteSemantico extends LeafDefaultVisitor {
             for (int i = 0; i < argsEnviados; i++) {
                 String tipoArg = (String) node.jjtGetChild(i + 1).jjtAccept(this, data);
                 String tipoParam = simFunc.tiposParametros.get(i);
-                if (tipoArg != null && !tipoArg.equals("error") && !tipoArg.equals(tipoParam) && !tipoArg.startsWith("arreglo")) {
+
+                // INTEGRACIÓN: Coerción en paso de parámetros (ej. enviar entero donde se pide decimal)
+                if (tipoArg != null && !tipoArg.equals("error") && !sonTiposCompatibles(tipoParam, tipoArg) && !tipoArg.startsWith("arreglo")) {
                     reportar((SimpleNode) node.jjtGetChild(i + 1), "El argumento #" + (i + 1) + " de '" + nombreFun + "' debe ser '" + tipoParam + "', pero le enviaste un '" + tipoArg + "'.");
                 }
             }
