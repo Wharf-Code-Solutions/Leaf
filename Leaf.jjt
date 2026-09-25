@@ -98,8 +98,8 @@ public class Leaf {
 
                 for (String err : errores) System.out.println("  " + err);
             } else {
-                System.out.println("  Programa válido. Sin errores sintácticos ni semánticos.");
-                System.out.println("  Árbol AST validado exitosamente en memoria.");
+                System.out.println("Programa válido. No se encontró ningún error.");
+                //System.out.println("  Árbol AST validado exitosamente en memoria.");
             }
 
             System.out.println("============================================");
