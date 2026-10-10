@@ -1,0 +1,21 @@
+//FizzBuzz
+funcion ejecutarFizzBuzz($limite como entero) entrega vacio >
+
+    para $i de 1 hasta $limite >
+        // Primero evaluamos el caso más estricto (divisible por 3 y por 5)
+        si ( ($i % 3) igual que 0 Y ($i % 5) igual que 0 ) >
+            mostrar("FizzBuzz").
+        < sino si ( ($i % 3) igual que 0 ) >
+            mostrar("Fizz").
+        < sino si ( ($i % 5) igual que 0 ) >
+            mostrar("Buzz").
+        < sino >
+            mostrar($i).
+        <
+    <
+<
+
+definir $n como entero con valor de ingresar("Ingresa un número entero").
+
+ejecutarFizzBuzz($n).
+mostrar("--- Iniciando secuencia FizzBuzz hasta el ", $n, " ---").

@@ -1,0 +1,12 @@
+//Encontrar el factorial de un número
+funcion factorial($n como entero) entrega entero >
+    si ($n menor o igual que 1) >
+        retornar 1.
+    < sino >
+        retornar $n * factorial($n - 1).
+    <
+<
+
+definir $numeroEvaluar como entero con valor de 5.
+mostrar("Calculando recursivamente el factorial de ", $numeroEvaluar).
+mostrar("El resultado es: ", factorial($numeroEvaluar)).

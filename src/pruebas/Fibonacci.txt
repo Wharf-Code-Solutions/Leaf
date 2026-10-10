@@ -1,0 +1,29 @@
+//Encuentra el valor de la posición N en la serie de Fibonacci
+funcion fibonacciOptimo($posicion como entero) entrega entero >
+    // Casos base
+    si ($posicion menor o igual que 0) >
+        retornar 0.
+    <
+    si ($posicion igual que 1) >
+        retornar 1.
+    <
+
+    definir $a como entero con valor de 0.
+    definir $b como entero con valor de 1.
+    definir $c como entero con valor de 0.
+
+    definir $limite como entero con valor de $posicion - 1.
+
+    // Ciclo de desplazamiento de valores
+    para $i de 1 hasta $limite >
+        $c con valor de $a + $b.
+        $a con valor de $b.
+        $b con valor de $c.
+    <
+
+    retornar $b.
+<
+
+definir $n como entero con valor de 8.
+mostrar("Buscando el numero de Fibonacci en la posicion ", $n).
+mostrar("El resultado optimizado es: ", fibonacciOptimo($n)).

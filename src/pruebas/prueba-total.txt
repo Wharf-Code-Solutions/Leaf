@@ -1,0 +1,122 @@
+/* =================================================================
+ * SCRIPT DE QA: BATERÍA DE PRUEBAS DE ORDENAMIENTO (ESTRÉS DE AST)
+ * Tester: QA Automático
+ * Objetivo: Validar ciclos anidados, arreglos mutables,
+ *           paso de parámetros, retornos y operadores lógicos.
+ * ================================================================= */
+
+mostrar("--- INICIANDO BATERIA DE PRUEBAS DE ORDENAMIENTO QA ---").
+
+/* ---------------------------------------------------------
+ * TEST 1: Ordenamiento de Burbuja (Bubble Sort)
+ * Valida: Anidación fuerte de ciclos "para" e intercambios.
+ * --------------------------------------------------------- */
+funcion ordenarBurbuja($arr como arreglo [entero]) entrega arreglo [entero] >
+    definir $n como entero con valor de longitud($arr).
+    definir $temp como entero con valor de 0.
+    definir $limiteI como entero con valor de $n - 1.
+
+    para $i de 0 hasta $limiteI >
+        definir $limiteJ como entero con valor de $n - $i - 2.
+
+        para $j de 0 hasta $limiteJ >
+            si ( $arr[$j] mayor que $arr[$j + 1] ) >
+                // Intercambio de variables
+                $temp con valor de $arr[$j].
+                $arr[$j] con valor de $arr[$j + 1].
+                $arr[$j + 1] con valor de $temp.
+            <
+        <
+    <
+    retornar $arr.
+<
+
+
+/* ---------------------------------------------------------
+ * TEST 2: Ordenamiento por Inserción (Insertion Sort)
+ * Valida: Ciclos "mientras" anidados, operadores lógicos
+ *         compuestos y ruptura prematura (romper).
+ * --------------------------------------------------------- */
+funcion ordenarInsercion($arr como arreglo [entero]) entrega arreglo [entero] >
+    definir $n como entero con valor de longitud($arr).
+    definir $clave como entero con valor de 0.
+    definir $j como entero con valor de 0.
+    definir $limite como entero con valor de $n - 1.
+
+    para $i de 1 hasta $limite >
+        $clave con valor de $arr[$i].
+        $j con valor de $i - 1.
+
+        // Usamos "romper" para estresar el manejo de scopes
+        mientras ( $j mayor o igual que 0 ) >
+            si ( $arr[$j] mayor que $clave ) >
+                $arr[$j + 1] con valor de $arr[$j].
+                $j con valor de $j - 1.
+            <
+            sino >
+                romper.
+            <
+        <
+        $arr[$j + 1] con valor de $clave.
+    <
+    retornar $arr.
+<
+
+
+/* ---------------------------------------------------------
+ * TEST 3: Ordenamiento por Selección (Selection Sort)
+ * Valida: Asignaciones de índices, recálculo de expresiones
+ *         en cabeceras de ciclos (inicio dinámico).
+ * --------------------------------------------------------- */
+funcion ordenarSeleccion($arr como arreglo [entero]) entrega arreglo [entero] >
+    definir $n como entero con valor de longitud($arr).
+    definir $min_idx como entero con valor de 0.
+    definir $temp como entero con valor de 0.
+    definir $limiteI como entero con valor de $n - 2.
+    definir $limiteJ como entero con valor de $n - 1.
+
+    para $i de 0 hasta $limiteI >
+        $min_idx con valor de $i.
+        definir $inicioJ como entero con valor de $i + 1.
+
+        para $j de $inicioJ hasta $limiteJ >
+            si ( $arr[$j] menor que $arr[$min_idx] ) >
+                $min_idx con valor de $j.
+            <
+        <
+
+        // Intercambio final del ciclo
+        $temp con valor de $arr[$min_idx].
+        $arr[$min_idx] con valor de $arr[$i].
+        $arr[$i] con valor de $temp.
+    <
+    retornar $arr.
+<
+
+
+/* =================================================================
+ * EJECUCIÓN DE CASOS DE PRUEBA (DATASETS DESORDENADOS)
+ * ================================================================= */
+
+// Dataset 1: Caos total (Burbuja)
+definir $listaBurbuja como arreglo [entero] con valor de [45, 12, 89, 2, 33, 71, 5, 100, 1].
+mostrar("--- PRUEBA 1: BURBUJA ---").
+mostrar("Array original :", $listaBurbuja).
+definir $resultadoBurbuja como arreglo [entero] con valor de ordenarBurbuja($listaBurbuja).
+mostrar("Array ordenado :", $resultadoBurbuja).
+
+// Dataset 2: Valores repetidos y cercanía (Inserción)
+definir $listaInsercion como arreglo [entero] con valor de [99, 10, 10, 55, 3, 77, 14, 8, 99].
+mostrar("--- PRUEBA 2: INSERCION ---").
+mostrar("Array original :", $listaInsercion).
+definir $resultadoInsercion como arreglo [entero] con valor de ordenarInsercion($listaInsercion).
+mostrar("Array ordenado :", $resultadoInsercion).
+
+// Dataset 3: Orden inverso total (Selección - El peor caso)
+definir $listaSeleccion como arreglo [entero] con valor de [90, 80, 70, 60, 50, 40, 30, 20, 10, 0].
+mostrar("--- PRUEBA 3: SELECCION ---").
+mostrar("Array original :", $listaSeleccion).
+definir $resultadoSeleccion como arreglo [entero] con valor de ordenarSeleccion($listaSeleccion).
+mostrar("Array ordenado :", $resultadoSeleccion).
+
+mostrar("--- BATERIA DE PRUEBAS COMPLETADA. ESPERANDO RESULTADOS DEL VISITANTE SEMANTICO ---").

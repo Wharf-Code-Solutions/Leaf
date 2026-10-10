@@ -1,0 +1,142 @@
+// =================================================================
+// ARCHIVO DE PRUEBA LEAF: BATERIA DE ERRORES TOTALES
+// Dispara todas las validaciones lexicas y sintacticas
+// =================================================================
+
+// -----------------------------------------------------------------
+// 1. ERRORES LEXICOS (Símbolos de otros lenguajes)
+// -----------------------------------------------------------------
+
+// Error Lexico: Uso de "$" suelto (sin letras pegadas)
+definir $ como entero con valor de 5.
+
+// Error Lexico: Uso de "=" en lugar de "con valor de"
+definir $edad como entero = 20.
+
+// Error Lexico: Uso de ";" en lugar de "." al final
+mostrar("Hola Mundo");
+
+// Error Lexico: Uso de llaves "{ }" en lugar de "> <"
+si ($edad igual que 20) {
+    mostrar("Tienes 20").
+}
+
+// Error Lexico: Uso de operadores logicos "&", "|", "!"
+si ($edad mayor que 10 & $edad menor que 30) >
+    mostrar("Rango").
+<
+
+// -----------------------------------------------------------------
+// 2. ERRORES SINTACTICOS: TRADUCCION DE TIPOS (Inglés a Español)
+// -----------------------------------------------------------------
+
+// Error Sintactico: Tipos de dato en ingles ("int", "string", "bool")
+definir $cantidad como int con valor de 10.
+definir $nombre como string con valor de "Leaf".
+definir $bandera como bool con valor de verdadero.
+
+
+// -----------------------------------------------------------------
+// 3. ERRORES SINTACTICOS: CONFUSIONES COMUNES
+// -----------------------------------------------------------------
+
+// Error Sintactico: Comparar matematicamente con ">" o "<" en vez de "mayor que"
+si ($cantidad > 5) >
+    mostrar("Es mayor").
+<
+
+// Error Sintactico: Usar parentesis "()" en lugar de corchetes "[]" en arreglos
+definir $lista como arreglo[entero] con valor de [1, 2, 3].
+mostrar($lista(0)).
+
+// Error Sintactico: Constantes inicializadas con variables (exige literal fijo)
+constante $LIMITE como entero con valor de $cantidad.
+
+// Error Sintactico: Nombrar una funcion empezando con "$"
+funcion $calcularTotal() entrega entero >
+    retornar 100.
+<
+
+// Error Sintactico: Olvidar el "$" al declarar o usar una variable
+definir precio como decimal con valor de 15.5.
+
+// Error Sintactico: Usar "aumentando" o "incrementando" en lugar de "paso"
+para $i de 1 hasta 10 aumentando 2 >
+    mostrar($i).
+<
+
+
+// -----------------------------------------------------------------
+// 4. ERRORES SINTACTICOS: INICIOS INVALIDOS DE INSTRUCCION
+// -----------------------------------------------------------------
+// Estas lineas disparan el "mensajeInicioInvalido" al empezar mal
+
+// Empezar instruccion con un numero o texto suelto
+100.
+"Hola".
+
+// Empezar con un booleano suelto
+verdadero.
+
+// Usar "caso", "defecto", "sino" o "sino si" fuera de sus bloques
+caso 1 -> mostrar("uno").
+defecto -> mostrar("nada").
+sino > mostrar("error"). <
+sino si ($cantidad igual que 1) > mostrar("error"). <
+
+// Empezar con operadores matematicos, logicos o relacionales
++ $cantidad.
+igual que 5.
+Y verdadero.
+NO falso.
+
+// Empezar con palabras reservadas mal ubicadas
+como entero.
+con valor de 5.
+entrega vacio.
+
+
+// -----------------------------------------------------------------
+// 5. ERRORES SINTACTICOS: PALABRAS CLAVE FALTANTES
+// -----------------------------------------------------------------
+
+// Falta "con valor de"
+definir $peso como decimal 9.5.
+
+// Falta "como"
+definir $altura decimal con valor de 1.8.
+
+// Falta "entrega" en la funcion
+funcion sumar() entero >
+    retornar 1.
+<
+
+// Falta "de" y "hasta" en el ciclo para
+para $k 1 10 paso 1 >
+    mostrar($k).
+<
+
+// Falta "veces" en el ciclo repetir
+repetir 5 >
+    mostrar("Repeticion").
+<
+
+// Falta flecha "->" en un caso
+segun ($cantidad) >
+    caso 1 mostrar("Uno").
+<
+
+// Falta coma "," en parametros
+mostrar("A" "B").
+
+
+// -----------------------------------------------------------------
+// 6. ERROR FINAL: FIN DE ARCHIVO INESPERADO (EOF)
+// -----------------------------------------------------------------
+
+// Al no cerrar este bloque con "<", el compilador llegara al final
+// del documento esperando el cierre y disparara el error de EOF personalizado.
+
+funcion bloqueAbierto() entrega vacio >
+    mostrar("Este bloque jamas se cerrara...").
+    mostrar("El compilador reportara el error de Fin de Archivo.").

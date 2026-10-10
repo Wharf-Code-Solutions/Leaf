@@ -1,0 +1,215 @@
+// ============================================================
+//  TEST COMPLETO — COMPILADOR LEAF
+//  Organizado en secciones. Cada caso de error trae un comentario
+//  con el error que se ESPERA que aparezca, para que compares
+//  linea por linea contra la salida real del compilador.
+// ============================================================
+
+
+// ============================================================
+// SECCION 1 — TIPOS BASICOS (validos)
+// ============================================================
+definir $a como entero  con valor de 5.
+definir $b como decimal con valor de 2.5.
+definir $c como texto   con valor de "hola".
+definir $d como logico  con valor de verdadero.
+
+
+// ============================================================
+// SECCION 2 — CONSTANTES (validas)
+// ============================================================
+constante $PI  como decimal con valor de 3.1416.
+constante $MAX como entero  con valor de 100.
+
+
+// ============================================================
+// SECCION 3 — REDECLARACIONES (errores esperados)
+// ============================================================
+definir $a como entero con valor de 1.
+// ^ ERROR esperado: "$a" ya fue declarada como variable
+
+constante $PI como entero con valor de 1.
+// ^ ERROR esperado: "$PI" ya fue declarada como constante
+
+
+// ============================================================
+// SECCION 4 — TIPO "vacio" MAL USADO (error esperado)
+// ============================================================
+definir $vaciotest como vacio con valor de 1.
+// ^ ERROR esperado: "vacio" es exclusivo para funciones
+
+
+// ============================================================
+// SECCION 5 — INCOMPATIBILIDAD DE TIPOS EN DECLARACION
+// ============================================================
+definir $num  como entero con valor de "texto".
+// ^ ERROR esperado: incompatibilidad de tipos (texto en entero)
+
+definir $flag como logico con valor de 5.
+// ^ ERROR esperado: incompatibilidad de tipos (entero en logico)
+
+definir $prom como decimal con valor de $a / 4.
+// ^ PENDIENTE DE DECISION DE DISEÑO: division entero/entero,
+//   revisa si tu equipo decidio que "/" siempre da decimal
+
+
+// ============================================================
+// SECCION 6 — VARIABLE FANTASMA (error esperado)
+// ============================================================
+mostrar($no_existe).
+// ^ ERROR esperado: variable fantasma, no declarada
+
+
+// ============================================================
+// SECCION 7 — CONSTANTE INMUTABLE (error esperado)
+// ============================================================
+$PI con valor de 3.0.
+// ^ ERROR esperado: constante inmutable, no puede reasignarse
+
+
+// ============================================================
+// SECCION 8 — CHOQUE DE TIPOS EN ASIGNACION
+// ============================================================
+$a con valor de "no soy entero".
+// ^ ERROR esperado: choque de tipos en asignacion
+
+
+// ============================================================
+// SECCION 9 — FUNCIONES (validas)
+// ============================================================
+funcion sumar($x como entero, $y como entero) entrega entero >
+    retornar $x + $y.
+<
+
+funcion saludar() entrega vacio >
+    mostrar("Hola desde Leaf").
+<
+
+definir $resultado como entero con valor de sumar(2, 3).
+saludar().
+
+
+// ============================================================
+// SECCION 10 — ERRORES SEMANTICOS EN FUNCIONES
+// ============================================================
+funcion sumar($x como entero, $y como entero) entrega entero >
+    retornar $x + $y.
+<
+// ^ ERROR esperado: la funcion "sumar" ya existe
+
+funcion conParamDuplicado($x como entero, $x como texto) entrega vacio >
+    mostrar($x).
+<
+// ^ ERROR esperado: parametro "$x" duplicado
+
+funcion conParamVacio($p como vacio) entrega vacio >
+    mostrar($p).
+<
+// ^ ERROR esperado: parametro no puede ser de tipo vacio
+
+definir $r2 como entero con valor de noExiste(1, 2).
+// ^ ERROR esperado: funcion "noExiste" no existe
+
+definir $r3 como entero con valor de sumar(1).
+// ^ ERROR esperado: numero de argumentos incorrecto
+
+definir $r4 como entero con valor de sumar(1, "dos").
+// ^ ERROR esperado: tipo de argumento incorrecto
+
+funcion retornaMal() entrega entero >
+    retornar "no soy entero".
+<
+// ^ ERROR esperado: tipo de retorno incompatible
+
+
+// ============================================================
+// SECCION 11 — CICLOS (validos, incluye variable de "para")
+// ============================================================
+mientras ($a menor que 10) >
+    $a con valor de $a + 1.
+<
+
+para $k de 1 hasta 5 >
+    mostrar("k vale: ", $k).
+<
+
+repetir 3 veces >
+    mostrar("repitiendo").
+<
+
+hacer >
+    mostrar("al menos una vez").
+< mientras ($a menor que 0).
+
+
+// ============================================================
+// SECCION 12 — CONDICIONALES Y SEGUN (validos)
+// ============================================================
+si ($a mayor que 5) >
+    mostrar("mayor a cinco").
+< sino >
+    mostrar("no mayor a cinco").
+<
+
+segun ($a) >
+    caso 1 ->
+        mostrar("uno").
+        romper.
+    defecto ->
+        mostrar("otro").
+<
+
+
+// ============================================================
+// SECCION 13 — ARREGLOS (validos)
+// ============================================================
+definir $lista como arreglo[entero] con valor de [1, 2, 3].
+$lista[0] con valor de 9.
+agregar 4 en $lista.
+quitar indice [1] de $lista.
+definir $tam como entero con valor de longitud($lista).
+
+definir $matriz como arreglo[arreglo[entero]] con valor de [[1, 2], [3, 4]].
+$matriz[0][1] con valor de 5.
+
+
+// ============================================================
+// SECCION 14 — ARREGLOS (error esperado)
+// ============================================================
+$lista[0] con valor de "no soy entero".
+// ^ ERROR esperado: tipo de elemento incompatible (arreglo[entero])
+
+
+// ============================================================
+// SECCION 15 — ERRORES SINTACTICOS
+//  A partir de aqui la recuperacion de errores puede generar
+//  efectos en cascada; compara con cuidado contra los comentarios.
+// ============================================================
+
+definir $sinPunto como entero con valor de 5
+mostrar($sinPunto).
+// ^ ERROR esperado: falta "." antes de "mostrar"
+
+repetir 3 >
+    mostrar("falta veces").
+<
+// ^ ERROR esperado: falta la palabra "veces"
+
+para $m de 1 >
+    mostrar("falta hasta").
+<
+// ^ ERROR esperado: falta "hasta"
+
+$ conNumero con valor de 1.
+// ^ ERROR esperado: "$" suelto
+
+funcion anidada() entrega vacio >
+    funcion interna() entrega vacio >
+        mostrar("no valido").
+    <
+<
+// ^ ERRORES esperados: funcion anidada no permitida + bloque huerfano
+
+hacer >
+    mostrar("cierre del archivo").
+< mientras ($a menor que 100 ).

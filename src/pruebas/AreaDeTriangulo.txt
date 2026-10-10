@@ -1,0 +1,8 @@
+// Encuentra el área de un triángulo
+definir $base como entero con valor de 5.
+definir $altura como entero con valor de 7.
+
+definir $area como decimal con valor de ($base * $altura) / 2.
+
+mostrar("Calculando el area de un triangulo de 5x7...").
+mostrar("El area resultante es: ", $area).

@@ -1,0 +1,14 @@
+//Suma los elementos de un arreglo mediante una función
+funcion sumarArreglo($arr como arreglo [entero]) entrega entero >
+    definir $suma como entero con valor de 0.
+    definir $limite como entero con valor de longitud($arr) - 1.
+
+    para $i de 0 hasta $limite >
+        $suma con valor de $suma + $arr[$i].
+    <
+
+    retornar $suma.
+<
+
+definir $datos como arreglo [entero] con valor de [5, 10, 15, 20].
+mostrar("La suma total de los elementos del arreglo es: ", sumarArreglo($datos)).

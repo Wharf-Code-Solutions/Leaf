@@ -1,0 +1,74 @@
+/* =========================================================================
+ *  qa-tester-semantico-tortura.txt
+ *  Batería de Pruebas de Estrés Extremo - QA Tester (Fase Semántica)
+ * ========================================================================= */
+
+// -------------------------------------------------------------------------
+// 1. USO DE VARIABLES FANTASMA (Sin declarar)
+// -------------------------------------------------------------------------
+$resultadoFantasma con valor de $inexistente + 10.
+
+
+// -------------------------------------------------------------------------
+// 2. ROMPIENDO LA INMUTABILIDAD DE LAS CONSTANTES
+// -------------------------------------------------------------------------
+constante $VERSION_OS como texto con valor de "v1.0".
+$VERSION_OS con valor de "v2.0". // ERROR: Constante inmutable reasignada
+
+
+// -------------------------------------------------------------------------
+// 3. USO ILEGAL DEL TIPO "VACIO"
+// -------------------------------------------------------------------------
+definir $errorVacio como vacio con valor de 0.         // ERROR: Variable vacía
+constante $constVacia como vacio con valor de falso.  // ERROR: Constante vacía
+
+
+// -------------------------------------------------------------------------
+// 4. CHOQUES DE TIPO EN DECLARACIONES
+// -------------------------------------------------------------------------
+definir $contadorVisitas como entero con valor de "muchas". // ERROR: Texto en entero
+constante $PI_FALSO como decimal con valor de verdadero.  // ERROR: Lógico en decimal
+
+
+// -------------------------------------------------------------------------
+// 5. MATEMÁTICAS PROHIBIDAS (Operaciones con tipos no numéricos)
+// -------------------------------------------------------------------------
+definir $calculoImposible como entero con valor de "hola" * 3.
+definir $logicaAbsurda como logico con valor de verdadero O "falso".
+
+
+// -------------------------------------------------------------------------
+// 6. FUNCIONES: FIRMAS, RETORNOS FALSOS Y ARIDAD
+// -------------------------------------------------------------------------
+funcion calcularSueldo($horas como entero, $tarifa como decimal) entrega entero >
+    // ERROR: Promete entero pero intenta retornar un texto
+    retornar "mil quinientos".
+<
+
+funcion sinRetorno() entrega vacio >
+    // ERROR: Promete vacio pero intenta retornar un número
+    retornar 42.
+<
+
+funcion probarLlamadasLocas() entrega vacio >
+
+    // ERROR: Llamar a una función fantasma que no existe
+    $x con valor de funcionQueNoExiste(1, 2, 3).
+
+    // ERROR: Sobran argumentos (exige 2, le mandamos 3)
+    calcularSueldo(40, 15.5, "extra");
+
+    // ERROR: Faltan argumentos (exige 2, le mandamos 1)
+    calcularSueldo(8);
+
+    // ERROR: Tipos de argumentos invertidos o incorrectos
+    calcularSueldo("cuarenta", "quince");
+<
+
+
+// -------------------------------------------------------------------------
+// 7. PARÁMETROS ILEGALES
+// -------------------------------------------------------------------------
+funcion funcionInvalida($paramFantasma como vacio) entrega vacio > // ERROR: Parámetro vacío
+    mostrar("Esto no compila").
+<

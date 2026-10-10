@@ -30,6 +30,8 @@ public class Leaf {
 
     public static void main(String[] args) {
             File archivo = null;
+            // Opción: java generado.Leaf <archivo> --guardar  -> escribe <archivo>.cuad junto al fuente
+            boolean guardarCuadruplos = args.length > 1 && "--guardar".equals(args[1].trim());
 
             if (args.length > 0) {
                 String ruta = args[0].trim();
@@ -79,8 +81,9 @@ public class Leaf {
                 errores.add("Tipo de Error: Léxico : Colapso fatal del motor al leer caracteres.");
             }
 
+            VisitanteSemantico visitante = null;
             if (raiz != null) {
-                LeafVisitor visitante = new VisitanteSemantico();
+                visitante = new VisitanteSemantico();
                 raiz.jjtAccept(visitante, null);
             }
 
@@ -99,7 +102,28 @@ public class Leaf {
                 for (String err : errores) System.out.println("  " + err);
             } else {
                 System.out.println("Programa válido. No se encontró ningún error.");
-                //System.out.println("  Árbol AST validado exitosamente en memoria.");
+
+                // ---- Código intermedio (cuádruplos): solo si NO hay errores ----
+                if (raiz != null && visitante != null) {
+                    try {
+                        GeneradorCodigoIntermedio generador = new GeneradorCodigoIntermedio(visitante);
+                        generador.generar(raiz);
+
+                        System.out.println("\n--- CÓDIGO INTERMEDIO (cuádruplos) ---");
+                        generador.imprimir();
+
+                        if (guardarCuadruplos) {
+                            try {
+                                File salida = generador.guardar(archivo);
+                                System.out.println("\nCuádruplos guardados en: " + salida.getPath());
+                            } catch (java.io.IOException ex) {
+                                System.out.println("\nNo se pudo guardar el archivo de cuádruplos: " + ex.getMessage());
+                            }
+                        }
+                    } catch (RuntimeException ex) {
+                        System.out.println("\nNo se pudo generar el código intermedio: " + ex.getMessage());
+                    }
+                }
             }
 
             System.out.println("============================================");
@@ -518,7 +542,7 @@ void cola_huerfana_hacer() : {}
         { registrarErrorSintactico(getToken(0), "Se encontró un \"mientras\" con punto final pero faltó la palabra \"hacer\" al inicio."); }
     } catch (ParseException e) {
         {
-            registrarErrorSintactico(tokenParaError(e), "Error en la structure huérfana: " + mensajeReporteError(e));
+            registrarErrorSintactico(tokenParaError(e), "Error en la estructura huérfana: " + mensajeReporteError(e));
             saltarHasta(PUNTO, EOF);
             if (getToken(1).kind == PUNTO) getNextToken();
         }
@@ -617,9 +641,16 @@ void expresion() #Expresion : {}
     condicion()
 }
 
+/* Precedencia lógica: Y se agrupa antes que O. Cada operador genera un nodo
+ * #Logica(3) = (izquierda, operador, derecha), igual que Aritmetica. */
 void condicion() : {}
 {
-    comparacion() ( op_logico() comparacion() )*
+    conjuncion() ( op_o() conjuncion() #Logica(3) )*
+}
+
+void conjuncion() : {}
+{
+    comparacion() ( op_y() comparacion() #Logica(3) )*
 }
 
 void comparacion() : {}
@@ -629,9 +660,22 @@ void comparacion() : {}
     | expresion_aritmetica()
 }
 
+/* Jerarquía aritmética (de menor a mayor precedencia), como indica el manual:
+ *   suma/resta  <  multiplicación/división/módulo  <  potencia/raíz enésima
+ * La potencia y la raíz enésima asocian a la derecha. Todos generan #Aritmetica(3). */
 void expresion_aritmetica() : {}
 {
-    termino() ( op_aritmetico() termino() #Aritmetica(3) )*
+    termino_mult() ( op_suma() termino_mult() #Aritmetica(3) )*
+}
+
+void termino_mult() : {}
+{
+    factor_pot() ( op_mult() factor_pot() #Aritmetica(3) )*
+}
+
+void factor_pot() : {}
+{
+    termino() ( op_pot() factor_pot() #Aritmetica(3) )?
 }
 
 void termino() : {}
@@ -666,9 +710,21 @@ void tipo_arreglo() #TipoArreglo : {}
     <ARREGLO_T> <CORCH_A> tipo() <CORCH_C>
 }
 
-void op_aritmetico() #Operador : { Token t; }
+void op_suma() #Operador : { Token t; }
 {
-    ( t=<MAS> | t=<MENOS> | t=<POR> | t=<DIV> | t=<POT> | t=<RAIZ> | t=<MOD> )
+    ( t=<MAS> | t=<MENOS> )
+    { jjtThis.jjtSetValue(t.image); }
+}
+
+void op_mult() #Operador : { Token t; }
+{
+    ( t=<POR> | t=<DIV> | t=<MOD> )
+    { jjtThis.jjtSetValue(t.image); }
+}
+
+void op_pot() #Operador : { Token t; }
+{
+    ( t=<POT> | t=<RAIZ> )
     { jjtThis.jjtSetValue(t.image); }
 }
 
@@ -678,9 +734,15 @@ void op_relacional() #Operador : { Token t; }
     { jjtThis.jjtSetValue(t.image); }
 }
 
-void op_logico() #Operador : { Token t; }
+void op_y() #Operador : { Token t; }
 {
-    ( t=<Y> | t=<O> )
+    t=<Y>
+    { jjtThis.jjtSetValue(t.image); }
+}
+
+void op_o() #Operador : { Token t; }
+{
+    t=<O>
     { jjtThis.jjtSetValue(t.image); }
 }
 
@@ -749,7 +811,7 @@ void segun() #Segun : { Token abreToken; }
 
     (
         try {
-            <DEFECTO> <FLECHA> bloque_caso()
+            caso_defecto()
         } catch (ParseException e) {
             {
                 registrarErrorSintactico(tokenParaError(e), "Error dentro del \"defecto\".");
@@ -771,6 +833,12 @@ void segun() #Segun : { Token abreToken; }
 void caso() #Caso : {}
 {
     <CASO> literal() <FLECHA> bloque_caso()
+}
+
+/* El "defecto" del segun tiene su propio nodo (antes sus instrucciones quedaban sueltas bajo Segun). */
+void caso_defecto() #Defecto : {}
+{
+    <DEFECTO> <FLECHA> bloque_caso()
 }
 
 void ciclo_mientras() #Mientras : {}

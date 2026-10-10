@@ -1,0 +1,24 @@
+//Calculadora de 2 números
+
+mostrar("Calcular operación de 2 número").
+definir $a como entero con valor de ingresar("Ingresa un número entero").
+definir $b como entero con valor de ingresar("Ingresa un número entero").
+definir $opcion como entero con valor de ingresar("Elije la operación a realizar: 1)Suma 2)Resta 3)Multipliación 4)División").
+
+segun ($opcion) >
+    caso 1 ->
+        mostrar("Suma: ", $a + $b).
+
+    caso 2 ->
+        mostrar("Resta: ", $a - $b).
+
+    caso 3 ->
+        mostrar("Multiplicacion: ", $a * $b).
+
+    caso 4 ->
+        mostrar("Division: ", $a / $b).
+
+    defecto ->
+        mostrar("Error: Opcion no valida").
+
+<

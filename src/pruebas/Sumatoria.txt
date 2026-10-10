@@ -1,0 +1,10 @@
+//Encuentra la sumatoria de 1 hasta N
+// Demuestra el manejo de variables acumuladoras en un ciclo "para"
+definir $limite como entero con valor de 10.
+definir $suma como entero con valor de 0.
+
+para $i de 1 hasta $limite >
+    $suma con valor de $suma + $i.
+<
+
+mostrar("La suma de todos los numeros del 1 al ", $limite, " es: ", $suma).

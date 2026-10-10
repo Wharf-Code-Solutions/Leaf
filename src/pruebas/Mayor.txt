@@ -1,0 +1,14 @@
+//Encuentra el número mayor en un arreglo
+
+definir $numeros como arreglo[entero] con valor de [12, 45, 7, 89, 23].
+definir $mayor como entero con valor de $numeros[0].
+definir $limite como entero con valor de longitud($numeros) - 1.
+
+para $i de 1 hasta $limite >
+    si ($numeros[$i] mayor que $mayor) >
+        $mayor con valor de $numeros[$i].
+    <
+<
+
+mostrar("Arreglo analizado: ", $numeros).
+mostrar("El numero mayor es: ", $mayor).

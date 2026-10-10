@@ -1,0 +1,115 @@
+/* ============================================================
+ *  ARCHIVO DE PRUEBA DE ESTRÉS - COMPILADOR LEAF (FASE 1)
+ * ============================================================ */
+
+// ---------------------------------------------------------
+// 1. DECLARACIONES GLOBALES VÁLIDAS
+// ---------------------------------------------------------
+definir $contadorGlobal como entero con valor de 0.
+definir $nombreSistema como texto con valor de "Leaf OS".
+constante $PI como decimal con valor de 3.14159.
+definir $matrizDatos como arreglo[arreglo[entero]] con valor de [ [1,2], [3,4] ].
+
+// ---------------------------------------------------------
+// 2. ERRORES SEMÁNTICOS: DUPLICIDAD GLOBAL
+// ---------------------------------------------------------
+definir $contadorGlobal como decimal con valor de 9.9. // ERROR: Ya existe como entero
+constante $PI como entero con valor de 3.              // ERROR: Constante ya definida
+
+// ---------------------------------------------------------
+// 3. FUNCIONES: FIRMAS Y PARÁMETROS
+// ---------------------------------------------------------
+funcion calcularArea($base como decimal, $altura como decimal) entrega decimal >
+    definir $area como decimal con valor de ($base * $altura) / 2.
+    retornar $area.
+<
+
+funcion procesarUsuario($nombre como texto, $nombre como texto) entrega vacio >
+    // ERROR: Parámetro $nombre duplicado en la misma firma
+    mostrar("Esto no debe compilar limpiamente").
+<
+
+// ---------------------------------------------------------
+// 4. ÁMBITOS LOCALES Y SHADOWING (VÁLIDO E INVÁLIDO)
+// ---------------------------------------------------------
+funcion pruebaAmbitos() entrega vacio >
+    // VÁLIDO: Está en ámbito local, no choca con el global (Shadowing)
+    definir $contadorGlobal como texto con valor de "Ahora soy texto local".
+
+    si (verdadero) >
+        // VÁLIDO: Sub-ámbito dentro del 'si'
+        definir $contadorGlobal como logico con valor de falso.
+
+        // ERROR: Ya declaraste $contadorGlobal dentro de este mismo bloque 'si'
+        definir $contadorGlobal como entero con valor de 10.
+    <
+<
+
+// ---------------------------------------------------------
+// 5. RESTRICCIÓN DE FUNCIONES ANIDADAS
+// ---------------------------------------------------------
+funcion rutinaPrincipal() entrega vacio >
+    definir $x como entero con valor de 1.
+
+    // ERROR: Interceptado por mensajeInicioInvalido(). No debe romper el bloque externo.
+    funcion rutinaOculta() entrega vacio >
+        mostrar("Soy una función ilegal anidada").
+    <
+
+    $x con valor de $x + 1.
+<
+
+// ---------------------------------------------------------
+// 6. PRUEBA DE ESTRÉS DE BLOQUES (CICLOS Y CONDICIONALES)
+// ---------------------------------------------------------
+funcion probarCiclos() entrega vacio >
+    definir $i como entero con valor de 0.
+
+    mientras ($i menor que 10) >
+        definir $temp como entero con valor de $i.
+        $i con valor de $i + 1.
+    <
+
+    // VÁLIDO: $temp se destruyó en el 'mientras', podemos reusar el nombre aquí
+    para $j de 0 hasta 5 paso 1 >
+        definir $temp como decimal con valor de 1.5.
+    <
+
+    repetir 3 veces >
+        hacer >
+            mostrar("Ciclo anidado").
+        < mientras (verdadero).
+    <
+
+    segun ($i) >
+        caso 1 ->
+            definir $temp como texto con valor de "Uno".
+        caso 2 ->
+            mostrar("Dos").
+        defecto ->
+            mostrar("Nada").
+    <
+<
+
+// ---------------------------------------------------------
+// 7. ERRORES SINTÁCTICOS Y LÉXICOS PENSADOS PARA EL MODO PÁNICO
+// ---------------------------------------------------------
+// Falta punto final
+$contadorGlobal con valor de 100
+
+// Variable mal formada (inicia con número)
+definir $1erronea como entero con valor de 5.
+
+// Falta operador de abrir bloque '>'
+si ($PI mayor que 3)
+    mostrar("Falta el símbolo de abrir bloque").
+<
+
+// Texto sin cerrar
+mostrar("Texto sin cerrar).
+
+// ---------------------------------------------------------
+// 8. OPERACIONES DE ARREGLOS
+// ---------------------------------------------------------
+agregar 5 en $matrizDatos[0].
+quitar indice [1] de $matrizDatos.

@@ -4,6 +4,14 @@ import java.util.HashMap;
 import java.util.Stack;
 
 public class TablaSimbolos {
+    // ===== [IDE] Rastreo paso a paso de la tabla (lo consume LeafIDE) =====
+    // No afecta el comportamiento del compilador: solo registra eventos en memoria.
+    // Requiere Java 16+ por el uso de 'record'.
+    public enum TipoEvento { ENTRAR, SALIR, INSERTAR, BUSCAR }
+    public record EventoTabla(TipoEvento tipo, String ambito, Simbolo simbolo, String mensaje) {}
+    public final java.util.List<EventoTabla> historial = new java.util.ArrayList<>();
+    // ======================================================================
+
     private Stack<HashMap<String, Simbolo>> pilaAmbitos;
     private Stack<String> pilaNombresAmbitos;
 
@@ -21,10 +29,15 @@ public class TablaSimbolos {
     public void entrarBloque(String nombreAmbito) {
         pilaAmbitos.push(new HashMap<>());
         pilaNombresAmbitos.push(nombreAmbito);
+        // [IDE] rastreo
+        historial.add(new EventoTabla(TipoEvento.ENTRAR, nombreAmbito, null, "Entrando al ámbito: " + nombreAmbito));
     }
 
     public void salirBloque() {
         if (pilaAmbitos.size() > 1) {
+            // [IDE] rastreo (se registra antes del pop para conocer el ámbito que sale)
+            String ambitoSaliente = pilaNombresAmbitos.peek();
+            historial.add(new EventoTabla(TipoEvento.SALIR, ambitoSaliente, null, "Saliendo del ámbito: " + ambitoSaliente));
             pilaAmbitos.pop();
             pilaNombresAmbitos.pop();
         }
@@ -39,16 +52,24 @@ public class TablaSimbolos {
     }
 
     public Simbolo buscarLocal(String nombre) {
-        return pilaAmbitos.peek().get(nombre);
+        Simbolo s = pilaAmbitos.peek().get(nombre);
+        // [IDE] rastreo
+        historial.add(new EventoTabla(TipoEvento.BUSCAR, obtenerAmbitoActual(), s, "Búsqueda local de '" + nombre + "': " + (s != null ? "Encontrado" : "No encontrado")));
+        return s;
     }
 
     public Simbolo buscar(String nombre) {
         // Búsqueda desde el bloque actual hacia afuera hasta llegar al global
         for (int i = pilaAmbitos.size() - 1; i >= 0; i--) {
             if (pilaAmbitos.get(i).containsKey(nombre)) {
-                return pilaAmbitos.get(i).get(nombre);
+                Simbolo s = pilaAmbitos.get(i).get(nombre);
+                // [IDE] rastreo
+                historial.add(new EventoTabla(TipoEvento.BUSCAR, pilaNombresAmbitos.get(i), s, "Búsqueda de '" + nombre + "' resuelta en ámbito: " + pilaNombresAmbitos.get(i)));
+                return s;
             }
         }
+        // [IDE] rastreo
+        historial.add(new EventoTabla(TipoEvento.BUSCAR, obtenerAmbitoActual(), null, "Búsqueda de '" + nombre + "' fallida"));
         return null;
     }
 
@@ -72,6 +93,9 @@ public class TablaSimbolos {
         } else {
             offsetLocal += tamano;
         }
+
+        // [IDE] rastreo
+        historial.add(new EventoTabla(TipoEvento.INSERTAR, nombreAmbito, nuevoSimbolo, "Insertado '" + nombre + "' como " + categoria + " (" + tipo + ")"));
 
         return nuevoSimbolo;
     }

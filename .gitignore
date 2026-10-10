@@ -1,0 +1,30 @@
+# Compilados
+*.class
+
+# Salida de --guardar del compilador
+*.cuad
+
+# src/generado/: ignorar lo que produce JavaCC/JJTree y versionar solo lo hecho a mano
+src/generado/*
+!src/generado/Simbolo.java
+!src/generado/TablaSimbolos.java
+!src/generado/VisitanteSemantico.java
+!src/generado/Cuadrupla.java
+!src/generado/GeneradorCodigoIntermedio.java
+
+# Claude Code (local)
+CLAUDE.md
+.claude/
+
+# IDE y sistema
+.idea/
+*.iml
+.vscode/
+Thumbs.db
+desktop.ini
+.DS_Store
+
+# Temporales
+*.log
+*.tmp
+*.bak

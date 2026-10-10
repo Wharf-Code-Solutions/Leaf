@@ -1,0 +1,11 @@
+//Encontrar el área de un círculo
+funcion calcularArea($radio como entero) entrega decimal >
+    constante $PI como decimal con valor de 3.14159.
+
+    retornar $PI * ($radio ^ 2).
+<
+
+
+definir $radio como entero con valor de 6.
+mostrar("Calculando el area de un circulo de radio ", $radio).
+mostrar("Resultado: ", calcularArea($radio)).
