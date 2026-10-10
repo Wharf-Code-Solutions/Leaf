@@ -28,7 +28,7 @@ package generado;
  *   LLAMA         res = call arg1, arg2 (arg2 = nº de argumentos); res puede ser null
  *   RETORNA       return arg1 (arg1 puede ser null)
  *   LEE           res = ingresar(arg1)  (arg1 = mensaje, opcional; res puede ser null)
- *   MUESTRA       print arg1
+ *   MUESTRA       print arg1  (arg2 = "fin" marca el último argumento de un mostrar)
  *   NUEVO_ARR     res = arreglo nuevo de arg1 elementos
  *   ARR_LEE       res = arg1[arg2]
  *   ARR_ESCRIBE   res[arg2] = arg1                      (res = arreglo destino)
@@ -55,6 +55,9 @@ public final class Cuadrupla {
         public final String simbolo;
         Op(String simbolo) { this.simbolo = simbolo; }
     }
+
+    /** Marca en arg2 del último MUESTRA de un mostrar. Los textos del programa siempre llevan comillas, así que no se confunde. */
+    public static final String FIN_MOSTRAR = "fin";
 
     public final Op op;
     public final String arg1;
@@ -91,7 +94,7 @@ public final class Cuadrupla {
             case LLAMA:       return (resultado != null ? resultado + " = " : "") + "call " + arg1 + ", " + arg2;
             case RETORNA:     return arg1 == null ? "return" : "return " + arg1;
             case LEE:         return (resultado != null ? resultado + " = " : "") + "read" + (arg1 != null ? " " + arg1 : "");
-            case MUESTRA:     return "print " + arg1;
+            case MUESTRA:     return (FIN_MOSTRAR.equals(arg2) ? "println " : "print ") + arg1;
             case NUEVO_ARR:   return resultado + " = newarray " + arg1;
             case ARR_LEE:     return resultado + " = " + arg1 + "[" + arg2 + "]";
             case ARR_ESCRIBE: return resultado + "[" + arg2 + "] = " + arg1;

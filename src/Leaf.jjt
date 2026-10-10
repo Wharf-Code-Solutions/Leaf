@@ -30,8 +30,16 @@ public class Leaf {
 
     public static void main(String[] args) {
             File archivo = null;
-            // Opción: java generado.Leaf <archivo> --guardar  -> escribe <archivo>.cuad junto al fuente
-            boolean guardarCuadruplos = args.length > 1 && "--guardar".equals(args[1].trim());
+            // Opciones (en cualquier orden): java generado.Leaf <archivo> [--guardar] [--tres-dir]
+            //   --guardar  -> escribe <archivo>.cuad junto al fuente
+            //   --tres-dir -> agrega la forma de tres direcciones (depuración) a la salida y al .cuad
+            boolean guardarCuadruplos = false;
+            boolean tresDirecciones = false;
+            for (int i = 1; i < args.length; i++) {
+                String opcion = args[i].trim();
+                if ("--guardar".equals(opcion)) guardarCuadruplos = true;
+                else if ("--tres-dir".equals(opcion)) tresDirecciones = true;
+            }
 
             if (args.length > 0) {
                 String ruta = args[0].trim();
@@ -110,11 +118,11 @@ public class Leaf {
                         generador.generar(raiz);
 
                         System.out.println("\n--- CÓDIGO INTERMEDIO (cuádruplos) ---");
-                        generador.imprimir();
+                        generador.imprimir(tresDirecciones);
 
                         if (guardarCuadruplos) {
                             try {
-                                File salida = generador.guardar(archivo);
+                                File salida = generador.guardar(archivo, tresDirecciones);
                                 System.out.println("\nCuádruplos guardados en: " + salida.getPath());
                             } catch (java.io.IOException ex) {
                                 System.out.println("\nNo se pudo guardar el archivo de cuádruplos: " + ex.getMessage());

@@ -136,15 +136,17 @@ public class GeneradorCodigoIntermedio {
         return lineas;
     }
 
-    /** Imprime la tabla de cuádruplos y, debajo, la forma de tres direcciones. */
-    public void imprimir() {
+    /** Imprime la tabla de cuádruplos; con tresDirecciones, agrega debajo la forma de texto (depuración). */
+    public void imprimir(boolean tresDirecciones) {
         for (String linea : getTabla()) System.out.println(linea);
-        System.out.println("\n--- Forma de tres direcciones ---");
-        for (String linea : getTexto()) System.out.println(linea);
+        if (tresDirecciones) {
+            System.out.println("\n--- Forma de tres direcciones ---");
+            for (String linea : getTexto()) System.out.println(linea);
+        }
     }
 
-    /** Guarda tabla + tres direcciones en un .cuad junto al fuente (programa.leaf -> programa.cuad). */
-    public File guardar(File fuente) throws IOException {
+    /** Guarda la tabla (y, si se pide, la forma de tres direcciones) en un .cuad junto al fuente (programa.leaf -> programa.cuad). */
+    public File guardar(File fuente, boolean tresDirecciones) throws IOException {
         String nombre = fuente.getName();
         int punto = nombre.lastIndexOf('.');
         if (punto > 0) nombre = nombre.substring(0, punto);
@@ -152,9 +154,11 @@ public class GeneradorCodigoIntermedio {
         File salida = new File(carpeta, nombre + ".cuad");
 
         List<String> todo = new ArrayList<String>(getTabla());
-        todo.add("");
-        todo.add("--- Forma de tres direcciones ---");
-        todo.addAll(getTexto());
+        if (tresDirecciones) {
+            todo.add("");
+            todo.add("--- Forma de tres direcciones ---");
+            todo.addAll(getTexto());
+        }
         Files.write(salida.toPath(), todo, StandardCharsets.UTF_8);
         return salida;
     }
@@ -331,9 +335,14 @@ public class GeneradorCodigoIntermedio {
     }
 
     private void mostrar(Node n) {
-        for (int i = 0; i < n.jjtGetNumChildren(); i++) {
+        int total = n.jjtGetNumChildren();
+        if (total == 0) {
+            emitir(Op.MUESTRA, "\"\"", Cuadrupla.FIN_MOSTRAR, null);
+            return;
+        }
+        for (int i = 0; i < total; i++) {
             String v = expr(n.jjtGetChild(i));
-            emitir(Op.MUESTRA, v, null, null);
+            emitir(Op.MUESTRA, v, i == total - 1 ? Cuadrupla.FIN_MOSTRAR : null, null);
         }
     }
 
