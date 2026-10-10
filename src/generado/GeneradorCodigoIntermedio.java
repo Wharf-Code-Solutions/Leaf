@@ -340,9 +340,11 @@ public class GeneradorCodigoIntermedio {
             emitir(Op.MUESTRA, "\"\"", Cuadrupla.FIN_MOSTRAR, null);
             return;
         }
+        // Primero se evalúan todos los argumentos (llamadas, cálculos) y luego se imprime
+        List<String> valores = new ArrayList<String>();
+        for (int i = 0; i < total; i++) valores.add(expr(n.jjtGetChild(i)));
         for (int i = 0; i < total; i++) {
-            String v = expr(n.jjtGetChild(i));
-            emitir(Op.MUESTRA, v, i == total - 1 ? Cuadrupla.FIN_MOSTRAR : null, null);
+            emitir(Op.MUESTRA, valores.get(i), i == total - 1 ? Cuadrupla.FIN_MOSTRAR : null, null);
         }
     }
 
