@@ -26,9 +26,15 @@ public class VisitanteSemantico extends LeafDefaultVisitor {
         // La tabla ya crea su ámbito "Global" automáticamente
     }
 
+    // Tipo de lo que solo se conoce al ejecutar (ingresar()); se acepta donde se pida cualquier tipo.
+    static final String TIPO_DINAMICO = "dinamico";
+
+    private static boolean esNumerico(String t) { return t.equals("entero") || t.equals("decimal"); }
+
     // MÉTODO: Valida la coerción implícita de entero a decimal
     private boolean sonTiposCompatibles(String esperado, String recibido) {
         if (esperado.equals(recibido)) return true;
+        if (recibido.equals(TIPO_DINAMICO)) return true;
         if (esperado.equals("decimal") && recibido.equals("entero")) return true;
         return false;
     }
@@ -368,7 +374,51 @@ public class VisitanteSemantico extends LeafDefaultVisitor {
         if (tipoIzq.equals("decimal") || tipoDer.equals("decimal") || "/".equals(operador)) {
             return "decimal";
         }
+        // Con un operando dinámico (ingresar) no se sabe si el resultado es entero o decimal
+        if (tipoIzq.equals(TIPO_DINAMICO) || tipoDer.equals(TIPO_DINAMICO)) return TIPO_DINAMICO;
         return "entero";
+    }
+
+    // ingresar(): su tipo se conoce solo al ejecutar
+    @Override
+    public Object visit(ASTLeer node, Object data) {
+        return TIPO_DINAMICO;
+    }
+
+    // -x : conserva el tipo numérico de x
+    @Override
+    public Object visit(ASTNegacion node, Object data) {
+        String t = (String) node.jjtGetChild(0).jjtAccept(this, data);
+        if (t == null || t.equals("error")) return "error";
+        if (!esNumerico(t) && !t.equals(TIPO_DINAMICO)) {
+            reportar(node, "Operación inválida: no se puede negar un valor de tipo '" + t + "'. Solo se permiten números.");
+            return "error";
+        }
+        return t;
+    }
+
+    // raiz x : x numérico; el resultado es decimal
+    @Override
+    public Object visit(ASTRaiz node, Object data) {
+        String t = (String) node.jjtGetChild(0).jjtAccept(this, data);
+        if (t == null || t.equals("error")) return "error";
+        if (!esNumerico(t) && !t.equals(TIPO_DINAMICO)) {
+            reportar(node, "Operación inválida: no se puede sacar la raíz de un valor de tipo '" + t + "'. Solo se permiten números.");
+            return "error";
+        }
+        return "decimal";
+    }
+
+    // no x : x lógico; el resultado es lógico
+    @Override
+    public Object visit(ASTNot node, Object data) {
+        String t = (String) node.jjtGetChild(0).jjtAccept(this, data);
+        if (t == null || t.equals("error")) return "error";
+        if (!t.equals("logico") && !t.equals(TIPO_DINAMICO)) {
+            reportar(node, "Operación lógica inválida: 'no' requiere un valor lógico, pero recibió '" + t + "'.");
+            return "error";
+        }
+        return "logico";
     }
 
     @Override
@@ -381,6 +431,9 @@ public class VisitanteSemantico extends LeafDefaultVisitor {
         }
 
         // Validación de compatibilidad para comparaciones
+        // Un valor dinámico (ingresar) se compara con cualquier tipo; se valida al ejecutar
+        if (tipoIzq.equals(TIPO_DINAMICO) || tipoDer.equals(TIPO_DINAMICO)) return "logico";
+
         boolean sonIguales = tipoIzq.equals(tipoDer);
         boolean sonNumerosMezclados = (tipoIzq.equals("entero") || tipoIzq.equals("decimal")) &&
                 (tipoDer.equals("entero") || tipoDer.equals("decimal"));
@@ -487,7 +540,9 @@ public class VisitanteSemantico extends LeafDefaultVisitor {
         if (tipoIzq == null || tipoDer == null || tipoIzq.equals("error") || tipoDer.equals("error")) {
             return "error";
         }
-        if (!tipoIzq.equals("logico") || !tipoDer.equals("logico")) {
+        boolean izqOk = tipoIzq.equals("logico") || tipoIzq.equals(TIPO_DINAMICO);
+        boolean derOk = tipoDer.equals("logico") || tipoDer.equals(TIPO_DINAMICO);
+        if (!izqOk || !derOk) {
             reportar(node, "Operación lógica inválida: 'Y' y 'O' requieren valores lógicos, pero recibió '"
                     + tipoIzq + "' y '" + tipoDer + "'.");
             return "error";
