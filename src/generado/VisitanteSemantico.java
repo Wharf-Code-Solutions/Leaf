@@ -483,10 +483,37 @@ public class VisitanteSemantico extends LeafDefaultVisitor {
     @Override public Object visit(ASTMostrar node, Object data) { super.visit(node, data); return null; }
 
     // ---- Validación de "romper" y "continuar" ----
+    // ---- Condiciones de si / sino si / mientras / hacer mientras: deben ser lógicas ----
+    private void validarCondicion(Node nodoCondicion, Object tipo, String estructura) {
+        if (!(tipo instanceof String)) return;
+        String t = (String) tipo;
+        if (t.equals("logico") || t.equals(TIPO_DINAMICO) || t.equals("error")) return;
+        reportar((SimpleNode) nodoCondicion, "La condición del \"" + estructura + "\" debe ser lógica, pero es de tipo '" + t + "'.");
+    }
+
+    /** Visita los hijos de la estructura; todo hijo que no sea un bloque es una condición. */
+    private Object visitarConCondiciones(SimpleNode node, Object data, String estructura) {
+        boolean primera = true;
+        for (int i = 0; i < node.jjtGetNumChildren(); i++) {
+            Node hijo = node.jjtGetChild(i);
+            Object tipo = hijo.jjtAccept(this, data);
+            if (!(hijo instanceof ASTBloque)) {
+                validarCondicion(hijo, tipo, estructura.equals("si") && !primera ? "sino si" : estructura);
+                primera = false;
+            }
+        }
+        return null;
+    }
+
+    @Override
+    public Object visit(ASTCondicional node, Object data) {
+        return visitarConCondiciones(node, data, "si");
+    }
+
     @Override
     public Object visit(ASTMientras node, Object data) {
         profundidadCiclo++;
-        Object r = super.visit(node, data);
+        Object r = visitarConCondiciones(node, data, "mientras");
         profundidadCiclo--;
         return r;
     }
@@ -494,7 +521,7 @@ public class VisitanteSemantico extends LeafDefaultVisitor {
     @Override
     public Object visit(ASTHacerMientras node, Object data) {
         profundidadCiclo++;
-        Object r = super.visit(node, data);
+        Object r = visitarConCondiciones(node, data, "hacer mientras");
         profundidadCiclo--;
         return r;
     }
