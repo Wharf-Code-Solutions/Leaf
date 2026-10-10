@@ -57,10 +57,16 @@ public class VisitanteSemantico extends LeafDefaultVisitor {
 
     @Override
     public Object visit(ASTBloque node, Object data) {
-        tabla.entrarBloque(tabla.obtenerAmbitoActual());
+        tabla.entrarBloque("Bloque");
         Object res = super.visit(node, data);
         tabla.salirBloque();
         return res;
+    }
+
+    /** Recorre el cuerpo de una función o de un para sin abrir un scope propio: comparte el del encabezado. */
+    private void visitarCuerpoSinScope(Node cuerpo, Object data) {
+        if (cuerpo instanceof ASTBloque) super.visit((ASTBloque) cuerpo, data);
+        else cuerpo.jjtAccept(this, data);
     }
 
     @Override
@@ -86,8 +92,7 @@ public class VisitanteSemantico extends LeafDefaultVisitor {
         simFunc.tipoRetorno = tipoRetorno;
         simbolosPorNodo.put(nodoId, simFunc); // [CÓDIGO INTERMEDIO]
 
-        tabla.resetearOffsetLocal();
-        tabla.entrarBloque(nombreFun);
+        tabla.entrarFuncion(nombreFun);
         retornoEsperado.push(tipoRetorno);
 
         for (int i = 1; i < numHijos - 2; i++) {
@@ -101,7 +106,7 @@ public class VisitanteSemantico extends LeafDefaultVisitor {
             }
         }
 
-        node.jjtGetChild(numHijos - 1).jjtAccept(this, data);
+        visitarCuerpoSinScope(node.jjtGetChild(numHijos - 1), data);
 
         retornoEsperado.pop();
         tabla.salirBloque();
@@ -243,7 +248,9 @@ public class VisitanteSemantico extends LeafDefaultVisitor {
         int numHijos = node.jjtGetNumChildren();
         profundidadCiclo++;
         for (int i = 1; i < numHijos; i++) {
-            node.jjtGetChild(i).jjtAccept(this, data);
+            Node hijo = node.jjtGetChild(i);
+            if (hijo instanceof ASTBloque) visitarCuerpoSinScope(hijo, data);
+            else hijo.jjtAccept(this, data);
         }
         profundidadCiclo--;
 

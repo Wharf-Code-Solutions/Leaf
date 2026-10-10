@@ -15,20 +15,41 @@ public class TablaSimbolos {
     private Stack<HashMap<String, Simbolo>> pilaAmbitos;
     private Stack<String> pilaNombresAmbitos;
 
+    // Marca qué scopes de la pila son el de una función (para saber cuándo se sale de ella)
+    private Stack<Boolean> pilaEsFuncion;
+
     private int offsetGlobal = 0;
     private int offsetLocal = 0;
+
+    /** Función en la que estamos (null = programa principal). Decide el espacio de offsets y Simbolo.ambito. */
+    private String funcionActual = null;
 
     public TablaSimbolos() {
         pilaAmbitos = new Stack<>();
         pilaNombresAmbitos = new Stack<>();
+        pilaEsFuncion = new Stack<>();
 
         pilaAmbitos.push(new HashMap<>()); // Crea el ámbito Global por defecto
         pilaNombresAmbitos.push("Global");
+        pilaEsFuncion.push(false);
     }
 
+    /** Scope de un bloque o ciclo. El nombre es solo descriptivo (rastreo); no decide offsets ni Simbolo.ambito. */
     public void entrarBloque(String nombreAmbito) {
+        abrirScope(nombreAmbito, false);
+    }
+
+    /** Scope de una función: reinicia el offset local y los símbolos que se inserten pertenecen a ella. */
+    public void entrarFuncion(String nombreFuncion) {
+        resetearOffsetLocal();
+        funcionActual = nombreFuncion;
+        abrirScope(nombreFuncion, true);
+    }
+
+    private void abrirScope(String nombreAmbito, boolean esFuncion) {
         pilaAmbitos.push(new HashMap<>());
         pilaNombresAmbitos.push(nombreAmbito);
+        pilaEsFuncion.push(esFuncion);
         // [IDE] rastreo
         historial.add(new EventoTabla(TipoEvento.ENTRAR, nombreAmbito, null, "Entrando al ámbito: " + nombreAmbito));
     }
@@ -40,6 +61,7 @@ public class TablaSimbolos {
             historial.add(new EventoTabla(TipoEvento.SALIR, ambitoSaliente, null, "Saliendo del ámbito: " + ambitoSaliente));
             pilaAmbitos.pop();
             pilaNombresAmbitos.pop();
+            if (pilaEsFuncion.pop()) funcionActual = null;
         }
     }
 
@@ -80,22 +102,25 @@ public class TablaSimbolos {
             return null; // Error: Ya existe en este ámbito
         }
 
-        String nombreAmbito = obtenerAmbitoActual();
-        int tamano = obtenerTamano(tipo, dimensiones);
-        int offsetAsignado = nombreAmbito.equals("Global") ? offsetGlobal : offsetLocal;
+        // Dueño del símbolo: la función en curso o "Global". Los bloques internos (si, para...) no cambian el dueño.
+        boolean enFuncion = funcionActual != null;
+        String duenio = enFuncion ? funcionActual : "Global";
+        // Una función no ocupa espacio de datos (su tipo es el de retorno, no el de un dato almacenado)
+        int tamano = categoria.equals("funcion") ? 0 : obtenerTamano(tipo, dimensiones);
+        int offsetAsignado = enFuncion ? offsetLocal : offsetGlobal;
 
-        Simbolo nuevoSimbolo = new Simbolo(nombre, tipo, categoria, nombreAmbito, offsetAsignado, linea);
+        Simbolo nuevoSimbolo = new Simbolo(nombre, tipo, categoria, duenio, offsetAsignado, linea);
         nuevoSimbolo.dimensiones = dimensiones;
         ambitoActual.put(nombre, nuevoSimbolo);
 
-        if (nombreAmbito.equals("Global")) {
-            offsetGlobal += tamano;
-        } else {
+        if (enFuncion) {
             offsetLocal += tamano;
+        } else {
+            offsetGlobal += tamano;
         }
 
-        // [IDE] rastreo
-        historial.add(new EventoTabla(TipoEvento.INSERTAR, nombreAmbito, nuevoSimbolo, "Insertado '" + nombre + "' como " + categoria + " (" + tipo + ")"));
+        // [IDE] rastreo (el ámbito del evento es el bloque donde se declara)
+        historial.add(new EventoTabla(TipoEvento.INSERTAR, obtenerAmbitoActual(), nuevoSimbolo, "Insertado '" + nombre + "' como " + categoria + " (" + tipo + ")"));
 
         return nuevoSimbolo;
     }
