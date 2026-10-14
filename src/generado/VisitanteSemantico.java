@@ -1,7 +1,9 @@
 package generado;
 
+import java.util.Collections;
 import java.util.IdentityHashMap;
 import java.util.Map;
+import java.util.Set;
 import java.util.Stack;
 
 public class VisitanteSemantico extends LeafDefaultVisitor {
@@ -30,6 +32,21 @@ public class VisitanteSemantico extends LeafDefaultVisitor {
     static final String TIPO_DINAMICO = "dinamico";
 
     private static boolean esNumerico(String t) { return t.equals("entero") || t.equals("decimal"); }
+
+    // Divisiones "a / b" con a y b enteros: su tipo es decimal, pero se pueden guardar en un entero (se trunca hacia cero).
+    private final Set<Node> divisionesEnteras = Collections.newSetFromMap(new IdentityHashMap<Node, Boolean>());
+
+    /** true si la expresión completa es una división simple de dos enteros (sin envolturas de paréntesis). */
+    public boolean esDivisionEnteraSimple(Node n) {
+        while (n instanceof ASTExpresion && n.jjtGetNumChildren() == 1) n = n.jjtGetChild(0);
+        return divisionesEnteras.contains(n);
+    }
+
+    // Compatibilidad de un valor (con su nodo) con el tipo esperado: coerciones normales + truncado de a / b entero
+    private boolean compatibleCon(String esperado, String recibido, Node nodoValor) {
+        if (sonTiposCompatibles(esperado, recibido)) return true;
+        return esperado.equals("entero") && recibido.equals("decimal") && nodoValor != null && esDivisionEnteraSimple(nodoValor);
+    }
 
     // MÉTODO: Valida la coerción implícita de entero a decimal
     private boolean sonTiposCompatibles(String esperado, String recibido) {
@@ -130,7 +147,8 @@ public class VisitanteSemantico extends LeafDefaultVisitor {
         String tipoRequerido = retornoEsperado.isEmpty() ? "vacio" : retornoEsperado.peek();
 
         // INTEGRACIÓN: Coerción en retornos de funciones
-        if (!sonTiposCompatibles(tipoRequerido, tipoDevuelto) && !tipoDevuelto.equals("error")) {
+        Node nodoValor = node.jjtGetNumChildren() > 0 ? node.jjtGetChild(0) : null;
+        if (!compatibleCon(tipoRequerido, tipoDevuelto, nodoValor) && !tipoDevuelto.equals("error")) {
             reportar(node, "La función promete entregar '" + tipoRequerido + "' pero está intentando retornar '" + tipoDevuelto + "'.");
         }
         return super.visit(node, data);
@@ -181,7 +199,7 @@ public class VisitanteSemantico extends LeafDefaultVisitor {
         String tipoValor = (String) nodoExpresion.jjtAccept(this, data);
 
         // INTEGRACIÓN: Coerción en inicialización de variables/constantes
-        if (tipoValor != null && !tipoValor.equals("error") && !sonTiposCompatibles(tipoDeclarado, tipoValor) && !tipoValor.startsWith("arreglo")) {
+        if (tipoValor != null && !tipoValor.equals("error") && !compatibleCon(tipoDeclarado, tipoValor, nodoExpresion) && !tipoValor.startsWith("arreglo")) {
             reportar(nodoExpresion, "Incompatibilidad de tipos: Intentas guardar un '" + tipoValor + "' en una variable definida como '" + tipoDeclarado + "'.");
         }
 
@@ -225,14 +243,14 @@ public class VisitanteSemantico extends LeafDefaultVisitor {
                         tipoEsperado = tipoEsperado.substring(8);
                     }
                     // INTEGRACIÓN: Coerción en asignación a arreglos
-                    if (!sonTiposCompatibles(tipoEsperado, tipoNuevoValor) && !tipoNuevoValor.startsWith("arreglo")) {
+                    if (!compatibleCon(tipoEsperado, tipoNuevoValor, node.jjtGetChild(1)) && !tipoNuevoValor.startsWith("arreglo")) {
                         reportar(node, "Choque de tipos: No puedes asignar un '" + tipoNuevoValor
                                 + "' al elemento de '" + nombreVar + "' que es de tipo '" + tipoEsperado + "'.");
                     }
                 }
             } else {
                 // INTEGRACIÓN: Coerción en asignaciones normales
-                if (!sonTiposCompatibles(simbolo.tipo, tipoNuevoValor) && !tipoNuevoValor.startsWith("arreglo")) {
+                if (!compatibleCon(simbolo.tipo, tipoNuevoValor, node.jjtGetChild(1)) && !tipoNuevoValor.startsWith("arreglo")) {
                     reportar(node, "Choque de tipos: No puedes asignar un '" + tipoNuevoValor + "' a la variable '" + nombreVar + "' que es de tipo '" + simbolo.tipo + "'.");
                 }
             }
@@ -370,6 +388,11 @@ public class VisitanteSemantico extends LeafDefaultVisitor {
             return "error";
         }
 
+        // a / b con ambos enteros: sigue siendo decimal, pero se recuerda para poder truncarlo al guardarlo en un entero
+        if ("/".equals(operador) && tipoIzq.equals("entero") && tipoDer.equals("entero")) {
+            divisionesEnteras.add(node);
+        }
+
         // INTEGRACIÓN: La división o la presencia de un decimal promueven el resultado a decimal
         if (tipoIzq.equals("decimal") || tipoDer.equals("decimal") || "/".equals(operador)) {
             return "decimal";
@@ -471,7 +494,7 @@ public class VisitanteSemantico extends LeafDefaultVisitor {
                 String tipoParam = simFunc.tiposParametros.get(i);
 
                 // INTEGRACIÓN: Coerción en paso de parámetros (ej. enviar entero donde se pide decimal)
-                if (tipoArg != null && !tipoArg.equals("error") && !sonTiposCompatibles(tipoParam, tipoArg) && !tipoArg.startsWith("arreglo")) {
+                if (tipoArg != null && !tipoArg.equals("error") && !compatibleCon(tipoParam, tipoArg, node.jjtGetChild(i + 1)) && !tipoArg.startsWith("arreglo")) {
                     reportar((SimpleNode) node.jjtGetChild(i + 1), "El argumento #" + (i + 1) + " de '" + nombreFun + "' debe ser '" + tipoParam + "', pero le enviaste un '" + tipoArg + "'.");
                 }
             }

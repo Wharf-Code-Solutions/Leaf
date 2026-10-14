@@ -116,7 +116,7 @@ public class GeneradorCodigoIntermedio {
         return lineas;
     }
 
-    /** Tabla de cuádruplos: #, operación, arg1, arg2, resultado. */
+    /** Tabla de cuádruplos: operación, arg1, arg2, resultado (cuatro columnas, sin índice). */
     public List<String> getTabla() {
         int w1 = 9, w2 = 4, w3 = 4, w4 = 9;
         for (Cuadrupla c : cuadruplas) {
@@ -127,11 +127,11 @@ public class GeneradorCodigoIntermedio {
             w4 = Math.max(w4, col[3].length());
         }
         List<String> lineas = new ArrayList<String>();
-        String formato = "%4s | %-" + w1 + "s | %-" + w2 + "s | %-" + w3 + "s | %-" + w4 + "s";
-        lineas.add(String.format(formato, "#", "operación", "arg1", "arg2", "resultado"));
-        for (int i = 0; i < cuadruplas.size(); i++) {
-            String[] col = cuadruplas.get(i).columnas();
-            lineas.add(String.format(formato, String.valueOf(i), col[0], col[1], col[2], col[3]));
+        String formato = "%-" + w1 + "s | %-" + w2 + "s | %-" + w3 + "s | %-" + w4 + "s";
+        lineas.add(String.format(formato, "operación", "arg1", "arg2", "resultado"));
+        for (Cuadrupla c : cuadruplas) {
+            String[] col = c.columnas();
+            lineas.add(String.format(formato, col[0], col[1], col[2], col[3]));
         }
         return lineas;
     }
@@ -672,6 +672,12 @@ public class GeneradorCodigoIntermedio {
             return literalArreglo(base.jjtGetChild(0), tipoEsperado);
         }
         String lugar = expr(n);
+        // a / b (enteros) guardado en un entero: el cociente decimal se trunca hacia cero
+        if ("entero".equals(tipoEsperado) && semantico.esDivisionEnteraSimple(n)) {
+            String t = nuevoTemporal("entero");
+            emitir(Op.A_ENTERO, lugar, null, t);
+            return t;
+        }
         return tipoEsperado == null ? lugar : coercion(lugar, tipoNodo(n), tipoEsperado);
     }
 

@@ -13,6 +13,7 @@ package generado;
  *
  *   ASIGNA        res = arg1
  *   A_DECIMAL     res = (decimal) arg1                  conversión entero -> decimal
+ *   A_ENTERO      res = (entero) arg1                   decimal -> entero, TRUNCA hacia cero (7.9 -> 7, -7.9 -> -7)
  *   SUMA .. POT   res = arg1 (op) arg2
  *   RAIZ_N        res = arg1 -/ arg2                    raíz arg1-ésima de arg2, igual que se escribe (3 -/ 27)
  *   NEG, RAIZ, NO res = (op) arg1
@@ -39,7 +40,7 @@ package generado;
 public final class Cuadrupla {
 
     public enum Op {
-        ASIGNA("="), A_DECIMAL("a_decimal"),
+        ASIGNA("="), A_DECIMAL("a_decimal"), A_ENTERO("a_entero"),
         SUMA("+"), RESTA("-"), MULT("*"), DIV("/"), MOD("%"), POT("^"), RAIZ_N("-/"),
         NEG("neg"), RAIZ("raiz"), NO("not"),
         IGUAL("=="), DIFERENTE("!="), MAYOR(">"), MENOR("<"), MAYOR_IGUAL(">="), MENOR_IGUAL("<="),
@@ -103,6 +104,7 @@ public final class Cuadrupla {
             case LONGITUD:    return resultado + " = length " + arg1;
             case ASIGNA:      return resultado + " = " + arg1;
             case A_DECIMAL:   return resultado + " = (decimal) " + arg1;
+            case A_ENTERO:    return resultado + " = (entero) " + arg1;
             case NEG:         return resultado + " = - " + arg1;
             case RAIZ:        return resultado + " = -/ " + arg1;
             case NO:          return resultado + " = not " + arg1;
