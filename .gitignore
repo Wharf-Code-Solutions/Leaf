@@ -28,3 +28,6 @@ desktop.ini
 *.log
 *.tmp
 *.bak
+
+# Documentación local (no se versiona)
+src/documentacion-*.md
