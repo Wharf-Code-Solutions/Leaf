@@ -196,7 +196,10 @@ public class VisitanteSemantico extends LeafDefaultVisitor {
             simbolosPorNodo.put(nodoVar, insertado); // [CÓDIGO INTERMEDIO]
         }
 
+        // Mientras se revisa el valor inicial, la variable declarada no puede usarse (aún no tiene valor)
+        simboloEnDeclaracion = insertado;
         String tipoValor = (String) nodoExpresion.jjtAccept(this, data);
+        simboloEnDeclaracion = null;
 
         // INTEGRACIÓN: Coerción en inicialización de variables/constantes
         if (tipoValor != null && !tipoValor.equals("error") && !compatibleCon(tipoDeclarado, tipoValor, nodoExpresion) && !tipoValor.startsWith("arreglo")) {
@@ -273,9 +276,15 @@ public class VisitanteSemantico extends LeafDefaultVisitor {
         profundidadCiclo++;
         for (int i = 1; i < numHijos; i++) {
             Node hijo = node.jjtGetChild(i);
-            if (hijo instanceof ASTBloque) visitarCuerpoSinScope(hijo, data);
-            else hijo.jjtAccept(this, data);
+            if (hijo instanceof ASTBloque) {
+                simboloEnDeclaracion = null;          // dentro del cuerpo la variable del ciclo ya tiene valor
+                visitarCuerpoSinScope(hijo, data);
+            } else {
+                simboloEnDeclaracion = simVarPara;    // desde / hasta / paso no pueden usar la variable del ciclo
+                hijo.jjtAccept(this, data);
+            }
         }
+        simboloEnDeclaracion = null;
         profundidadCiclo--;
 
         tabla.salirBloque();
@@ -325,8 +334,19 @@ public class VisitanteSemantico extends LeafDefaultVisitor {
             reportar(node, "Uso de variable fantasma: '" + nombreVar + "' no ha sido declarada.");
             return "error";
         }
+        if (simbolo == simboloEnDeclaracion) {
+            reportarUsoSinInicializar(node, nombreVar);
+            return "error";
+        }
         simbolosPorNodo.put(node, simbolo); // [CÓDIGO INTERMEDIO]
         return simbolo.tipo;
+    }
+
+    // Variable que se está declarando en este momento (null si no hay ninguna): su valor inicial aún no existe
+    private Simbolo simboloEnDeclaracion = null;
+
+    private void reportarUsoSinInicializar(SimpleNode nodo, String nombreVar) {
+        reportar(nodo, "La variable '" + nombreVar + "' no ha sido inicializada: no puedes usarla dentro de su propia declaración.");
     }
 
     @Override
@@ -350,6 +370,10 @@ public class VisitanteSemantico extends LeafDefaultVisitor {
         Simbolo simbolo = tabla.buscar(nombreVar);
 
         if (simbolo == null || simbolo.tipo == null) return "error";
+        if (simbolo == simboloEnDeclaracion) {
+            reportarUsoSinInicializar(nodoVar, nombreVar);
+            return "error";
+        }
         simbolosPorNodo.put(nodoVar, simbolo); // [CÓDIGO INTERMEDIO]
 
         // [CÓDIGO INTERMEDIO] Se visitan las expresiones de los índices (antes no se revisaban).
