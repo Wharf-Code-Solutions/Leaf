@@ -634,14 +634,11 @@ void nombre_funcion() #Id : { Token t; }
     t=<ID> { jjtThis.jjtSetValue(t.image); }
 }
 
+/* El mensaje de ingresar puede ser una lista de expresiones separadas por coma, igual que mostrar:
+ * ingresar("Edad de ", $nombre, ": ") */
 void llamada_leer() #Leer : {}
 {
-    <LEER> <PAREN_A> ( literal_texto() )? <PAREN_C>
-}
-
-void literal_texto() #Literal : { Token t; }
-{
-    t=<CADENA> { jjtThis.jjtSetValue(t.image); }
+    <LEER> <PAREN_A> ( expresion() ( <COMA> expresion() )* )? <PAREN_C>
 }
 
 void expresion() #Expresion : {}

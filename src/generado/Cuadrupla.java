@@ -28,7 +28,8 @@ package generado;
  *   PARAM         pasa arg1 como argumento
  *   LLAMA         res = call arg1, arg2 (arg2 = nº de argumentos); res puede ser null
  *   RETORNA       return arg1 (arg1 puede ser null)
- *   LEE           res = ingresar(arg1)  (arg1 = mensaje, opcional; res puede ser null)
+ *   LEE           res = ingresar(arg1)  (arg1 = mensaje, opcional; res puede ser null).
+ *                 Si el mensaje tiene varias partes o es una variable, antes del LEE van sus MUESTRA sin "fin" y arg1 queda vacío
  *   MUESTRA       print arg1  (arg2 = "fin" marca el último argumento de un mostrar)
  *   NUEVO_ARR     res = arreglo nuevo de arg1 elementos
  *   ARR_LEE       res = arg1[arg2]

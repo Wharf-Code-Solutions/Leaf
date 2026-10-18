@@ -426,9 +426,13 @@ public class VisitanteSemantico extends LeafDefaultVisitor {
         return "entero";
     }
 
-    // ingresar(): su tipo se conoce solo al ejecutar
+    // ingresar(): su tipo se conoce solo al ejecutar. Las partes del mensaje se visitan (como en mostrar)
+    // para validar que las variables existan y resolver sus símbolos; pueden ser de cualquier tipo.
     @Override
     public Object visit(ASTLeer node, Object data) {
+        for (int i = 0; i < node.jjtGetNumChildren(); i++) {
+            node.jjtGetChild(i).jjtAccept(this, data);
+        }
         return TIPO_DINAMICO;
     }
 

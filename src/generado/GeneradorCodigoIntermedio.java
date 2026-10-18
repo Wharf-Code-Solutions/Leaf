@@ -816,7 +816,18 @@ public class GeneradorCodigoIntermedio {
     /** ingresar() / ingresar("mensaje") */
     private String leer(Node n, boolean comoSentencia) {
         String mensaje = null;
-        if (n.jjtGetNumChildren() > 0) mensaje = valor(n.jjtGetChild(0));
+        int partes = n.jjtGetNumChildren();
+        Node unica = (partes == 1) ? sinEnvolturas(n.jjtGetChild(0)) : null;
+        if (unica instanceof ASTLiteral && unica.jjtGetNumChildren() == 0 && valor(unica).startsWith("\"")) {
+            // Un solo texto literal: queda en el propio read (arg1)
+            mensaje = valor(unica);
+        } else if (partes > 0) {
+            // Varias partes o una variable: se evalúan todas, se imprimen SIN "fin" (sin salto de línea,
+            // para que el usuario escriba a continuación del mensaje) y el read va sin mensaje
+            List<String> valores = new ArrayList<String>();
+            for (int i = 0; i < partes; i++) valores.add(expr(n.jjtGetChild(i)));
+            for (String v : valores) emitir(Op.MUESTRA, v, null, null);
+        }
         if (comoSentencia) {
             emitir(Op.LEE, mensaje, null, null);
             return null;

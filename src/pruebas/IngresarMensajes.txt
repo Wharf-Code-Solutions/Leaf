@@ -1,0 +1,7 @@
+// Ingresar con distintos tipos de mensaje
+definir $nombre como texto con valor de ingresar().
+definir $edad como entero con valor de ingresar("Edad: ").
+definir $ciudad como texto con valor de ingresar("Ciudad de ", $nombre, ": ").
+ingresar("Pulsa una tecla para continuar: ").
+$edad con valor de ingresar("Nueva edad de ", $nombre, " (antes ", $edad, "): ").
+mostrar($nombre, " vive en ", $ciudad, " y tiene ", $edad, " años.").
