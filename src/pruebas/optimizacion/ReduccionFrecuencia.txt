@@ -1,0 +1,20 @@
+// Reducción de frecuencia (bucles)
+// Los cálculos que dan lo mismo en cada vuelta se sacan del ciclo y se hacen una sola vez.
+definir $n como entero con valor de ingresar("Escribe un numero: ").
+definir $i como entero con valor de 0.
+definir $suma como entero con valor de 0.
+
+// $n * 2 (condición) y $n * 3 (cuerpo) no cambian dentro del ciclo
+mientras ($i menor que $n * 2) >
+    $suma con valor de $suma + $n * 3.
+    $i con valor de $i + 1.
+<
+mostrar("Suma: ", $suma).
+
+// Ciclos anidados: $n * $n no cambia en ninguno de los dos ciclos;
+// $f * 10 no cambia dentro del ciclo interno, pero sí en el externo
+para $f de 1 hasta 3 >
+    para $c de 1 hasta 3 >
+        mostrar($f * 10 + $c + $n * $n).
+    <
+<

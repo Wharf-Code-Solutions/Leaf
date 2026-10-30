@@ -35,7 +35,7 @@ public final class Optimizador {
         List<Cuadrupla> lista = new ArrayList<Cuadrupla>(original);
         lista = new PlegadoConstantes(this).aplicar(lista);
         // lista = new ReduccionFuerza(this).aplicar(lista);       (compañero)
-        // lista = new ReduccionFrecuencia(this).aplicar(lista);
+        lista = new ReduccionFrecuencia(this).aplicar(lista);
         // lista = new ExpansionBucles(this).aplicar(lista);       (compañero)
         lista = new PlegadoConstantes(this).aplicar(lista);
         return Collections.unmodifiableList(lista);
