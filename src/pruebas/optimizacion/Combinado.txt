@@ -1,0 +1,13 @@
+// Plegado de constantes y reducción de frecuencia en el mismo programa
+definir $n como entero con valor de 4.
+definir $i como entero con valor de 0.
+definir $total como entero con valor de 0.
+
+// 1. La reducción de frecuencia saca "$n * 2 + 1" del ciclo (no cambia en ninguna vuelta).
+// 2. Ya fuera del ciclo, el plegado sabe que $n vale 4 y lo calcula: 4 * 2 + 1 = 9.
+// 3. Dentro del ciclo, el plegado calcula "2 * 3 + 4" = 10 desde el principio.
+mientras ($i menor que $n * 2 + 1) >
+    $total con valor de $total + $i * (2 * 3 + 4).
+    $i con valor de $i + 1.
+<
+mostrar("Total: ", $total).
