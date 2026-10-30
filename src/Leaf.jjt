@@ -117,12 +117,17 @@ public class Leaf {
                         GeneradorCodigoIntermedio generador = new GeneradorCodigoIntermedio(visitante);
                         generador.generar(raiz);
 
-                        System.out.println("\n--- CÓDIGO INTERMEDIO (cuádruplos) ---");
-                        generador.imprimir(tresDirecciones);
+                        // La original solo se muestra; la optimizada es la definitiva (la usará el código objeto)
+                        java.util.List<Cuadrupla> original = generador.getCuadruplas();
+                        java.util.List<Cuadrupla> optimizada = new Optimizador(generador).optimizar(original);
+
+                        java.util.List<String> lineas = FormatoCuadruplas.salida(original, optimizada, tresDirecciones);
+                        System.out.println();
+                        for (String linea : lineas) System.out.println(linea);
 
                         if (guardarCuadruplos) {
                             try {
-                                File salida = generador.guardar(archivo, tresDirecciones);
+                                File salida = FormatoCuadruplas.guardar(archivo, lineas);
                                 System.out.println("\nCuádruplos guardados en: " + salida.getPath());
                             } catch (java.io.IOException ex) {
                                 System.out.println("\nNo se pudo guardar el archivo de cuádruplos: " + ex.getMessage());

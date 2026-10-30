@@ -11,6 +11,12 @@ src/generado/*
 !src/generado/VisitanteSemantico.java
 !src/generado/Cuadrupla.java
 !src/generado/GeneradorCodigoIntermedio.java
+!src/generado/FormatoCuadruplas.java
+!src/generado/AnalisisCuadruplas.java
+!src/generado/Optimizador.java
+!src/generado/EvaluadorConstantes.java
+!src/generado/PlegadoConstantes.java
+!src/generado/ReduccionFrecuencia.java
 
 # Claude Code (local)
 CLAUDE.md
