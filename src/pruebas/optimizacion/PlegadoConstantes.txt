@@ -1,0 +1,17 @@
+// Plegado de constantes (mirilla)
+// Las operaciones con valores conocidos se calculan al compilar.
+constante $PI como decimal con valor de 3.1416.
+constante $IVA como decimal con valor de 0.16.
+
+definir $radio como entero con valor de 2.
+definir $area como decimal con valor de $PI * $radio ^ 2.
+definir $precio como decimal con valor de 100 * (1 + $IVA).
+definir $segundos como entero con valor de 60 * 60 * 24.
+definir $mitad como entero con valor de 7 / 2.
+definir $mayor como logico con valor de 8 + 4 * 2 mayor que 15.
+
+mostrar("Area: ", $area).
+mostrar("Precio con IVA: ", $precio).
+mostrar("Segundos en un dia: ", $segundos).
+mostrar("Mitad de 7: ", $mitad).
+mostrar("16 es mayor que 15: ", $mayor).
