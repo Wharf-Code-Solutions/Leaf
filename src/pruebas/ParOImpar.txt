@@ -1,7 +1,6 @@
 // Encontrar si un número es par o impar
 definir $numero como decimal con valor de 14.3.
 
-
 mostrar("Evaluando si el numero ", $numero, " es par o impar...").
 
 si (($numero % 2) igual que 0) >
@@ -9,3 +8,4 @@ si (($numero % 2) igual que 0) >
 < sino >
     mostrar("El numero es impar.").
 <
+

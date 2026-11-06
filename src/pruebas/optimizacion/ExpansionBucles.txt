@@ -1,0 +1,65 @@
+
+
+// Caso 7 (NO se expande): el limite es un parametro, no se conoce en compilacion
+funcion contar($n como entero) entrega vacio >
+    para $z de 1 hasta $n >
+        mostrar("z = ", $z).
+    <
+<
+
+definir $suma como entero con valor de 0.
+
+// Caso 1 (SE expande 3 veces): repetir con cantidad fija; el plegado calcula $suma
+repetir 3 veces >
+    $suma con valor de $suma + 5.
+<
+mostrar("Suma: ", $suma).
+
+// Caso 2 (SE expande 4 veces): para con limites constantes; el cuerpo usa el contador
+definir $arr como arreglo [entero] con valor de [0, 0, 0, 0].
+para $i de 0 hasta 3 >
+    $arr[$i] con valor de $i * 2.
+<
+
+// Caso 3 (SE expande 3 veces): para descendente con paso negativo.
+// El $k del para solo existe dentro del ciclo; el $k de afuera es otra variable (sigue valiendo 0)
+definir $k como entero con valor de 0.
+para $k de 10 hasta 4 paso -3 >
+    mostrar("k = ", $k).
+<
+mostrar("k final: ", $k).
+
+// Caso 4 (SE expande 5 veces): "romper" salta al final de todas las copias
+para $m de 1 hasta 5 >
+    si ( $m igual que 3 ) >
+        romper.
+    <
+    mostrar("m = ", $m).
+<
+
+// Caso 5 (SE expande 4 veces): "continuar" salta al final de SU copia
+repetir 4 veces >
+    si ( $suma mayor que 100 ) >
+        continuar.
+    <
+    $suma con valor de $suma + 1.
+<
+
+// Caso 6 (SE expanden ambos): ciclos anidados, primero el interno y luego el externo
+para $a de 1 hasta 2 >
+    para $b de 1 hasta 2 >
+        mostrar($a, " x ", $b).
+    <
+<
+
+// Caso 8 (NO se expande): demasiadas vueltas (mas que MAX_ITERACIONES)
+para $q de 1 hasta 100 >
+    mostrar($q).
+<
+
+// Caso 9 (se ELIMINA): el ciclo nunca se ejecuta
+repetir 0 veces >
+    mostrar("nunca").
+<
+
+contar(3).

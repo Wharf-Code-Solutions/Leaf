@@ -1,0 +1,5 @@
+definir $n como entero con valor de ingresar().
+definir $i como entero con valor de 0.
+mientras ($i menor que $n * 2) >
+    $i con valor de $i + 1.
+<
