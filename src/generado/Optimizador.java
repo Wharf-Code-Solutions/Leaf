@@ -15,7 +15,7 @@ import java.util.Map;
  *
  * Métodos, en el orden en que se aplican:
  *   1. Plegado de constantes            (mirilla)
- *   2. Reducción de fuerza              (mirilla)  -> pendiente (compañero)
+ *   2. Reducción de fuerza              (mirilla)
  *   3. Reducción de frecuencia          (bucles)
  *   4. Expansión de bucles              (bucles)
  *   5. Plegado de constantes, otra vez, para aprovechar lo que dejaron los anteriores
@@ -43,7 +43,7 @@ public final class Optimizador {
     public List<Cuadrupla> optimizar(List<Cuadrupla> original) {
         List<Cuadrupla> lista = new ArrayList<Cuadrupla>(original);
         lista = new PlegadoConstantes(this).aplicar(lista);
-        // lista = new ReduccionFuerza(this).aplicar(lista);       (compañero)
+        lista = new ReduccionFuerza(this).aplicar(lista);
         lista = new ReduccionFrecuencia(this).aplicar(lista);
         lista = new ExpansionBucles(this).aplicar(lista);
         lista = new PlegadoConstantes(this).aplicar(lista);

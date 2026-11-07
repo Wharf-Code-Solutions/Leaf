@@ -18,6 +18,7 @@ src/generado/*
 !src/generado/PlegadoConstantes.java
 !src/generado/ReduccionFrecuencia.java
 !src/generado/ExpansionBucles.java
+!src/generado/ReduccionFuerza.java
 
 # Claude Code (local)
 CLAUDE.md

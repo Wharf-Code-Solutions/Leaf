@@ -1,0 +1,22 @@
+// Reducción de fuerza mediante optimizaciones de mirilla.
+
+// Solicitamos un número durante la ejecución.
+definir $x como entero con valor de ingresar("Escribe un numero: ").
+
+// Caso 1: multiplicación por 2.
+definir $doble como entero con valor de $x * 2.
+
+// Caso 2: multiplicación por 2 con operandos invertidos.
+definir $doble2 como entero con valor de 2 * $x.
+
+// Caso 3: multiplicación por otro número.
+definir $triple como entero con valor de $x * 3.
+
+// Caso 4: multiplicación decimal.
+definir $decimal como decimal con valor de 2.5.
+definir $resultadoDecimal como decimal con valor de $decimal * 2.
+
+mostrar("Doble: ", $doble).
+mostrar("Doble invertido: ", $doble2).
+mostrar("Triple: ", $triple).
+mostrar("Decimal: ", $resultadoDecimal).
